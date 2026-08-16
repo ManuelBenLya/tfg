@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # Base de Datos (Relacional + Series Temporales)
+  db:
+    image: timescale/timescaledb:latest-pg15
+    container_name: monitorizacion_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password_segura
+      POSTGRES_DB: sistema_it
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # API Central (FastAPI)
+  api:
+    build: 
+      context: ./backend
+    container_name: monitorizacion_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://admin:password_segura@db:5432/sistema_it
+    volumes:
+      - ./backend/app:/code/app
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  db_data:
