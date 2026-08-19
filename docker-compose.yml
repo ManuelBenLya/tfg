@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Base de Datos (Relacional + Series Temporales)
+  # Base de Datos (Postgres + Timescale)
   db:
     image: timescale/timescaledb:latest-pg15
     container_name: monitorizacion_db
