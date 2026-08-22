@@ -1,29 +1,55 @@
 from pydantic import BaseModel
 from uuid import UUID
 
-# 1. Esquema Base: Las propiedades que comparten todos los usuarios
-class UsuarioBase(BaseModel):
+# -------------------------------------------------------------------
+# 1. ESQUEMAS PARA EL REGISTRO PÚBLICO (NUEVA EMPRESA)
+# -------------------------------------------------------------------
+class RegistroEmpresaCreate(BaseModel):
+    """
+    Datos requeridos cuando un cliente nuevo registra su empresa 
+    en la plataforma por primera vez.
+    """
+    nombre_empresa: str
     email: str
-    rol: str = "administrador"
-
-# 2. Esquema de Creación: Lo que pedimos cuando alguien se registra (añade la contraseña)
-class UsuarioCreate(UsuarioBase):
     password: str
 
-# 3. Esquema de Respuesta: Lo que devolvemos al frontend (oculta la contraseña, muestra el ID)
+# -------------------------------------------------------------------
+# 2. ESQUEMAS PARA USUARIOS (EMPLEADOS)
+# -------------------------------------------------------------------
+class UsuarioBase(BaseModel):
+    email: str
+    rol: str = "usuario" # Por seguridad, por defecto nadie es admin
+
+class UsuarioCreate(UsuarioBase):
+    """
+    Datos requeridos cuando un Administrador crea una cuenta 
+    para un empleado de su equipo.
+    """
+    password: str
+
 class UsuarioResponse(UsuarioBase):
+    """
+    Lo que devolvemos al frontend (oculta la contraseña, muestra IDs).
+    """
     id: UUID
+    empresa_id: UUID # 🌟 CRÍTICO: Para que Next.js sepa a qué empresa pertenece
     
-    # Configuración fundamental para que Pydantic entienda los modelos de SQLAlchemy
     class Config:
         from_attributes = True
 
-# Si no lo tienes, asegúrate de importar BaseModel arriba:
-# from pydantic import BaseModel
-
+# -------------------------------------------------------------------
+# 3. ESQUEMAS PARA AUTENTICACIÓN (JWT)
+# -------------------------------------------------------------------
 class Token(BaseModel):
     access_token: str
     token_type: str
 
 class TokenData(BaseModel):
     email: str | None = None
+
+
+
+class AjustesUpdate(BaseModel):
+    discord_webhook: str | None = None
+    slack_webhook: str | None = None
+    recibir_alertas_email: bool | None = True

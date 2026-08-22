@@ -1,32 +1,30 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Server, Plus, Search, CheckCircle2, AlertTriangle, XCircle, Settings, Loader2 } from 'lucide-react';
-import ModalUmbrales from '@/components/ui/ModalUmbrales'; // Asegúrate de que la ruta sea la correcta en tu proyecto
-import ModalNuevoServidor from '@/components/ui/ModalNuevoServidor'; // Asegúrate de la ruta correcta
-
+import { Server, Plus, Search, CheckCircle2, AlertTriangle, XCircle, Settings, Loader2, Users, FileText } from 'lucide-react';
+import ModalUmbrales from '@/components/ui/ModalUmbrales'; 
+import ModalNuevoServidor from '@/components/ui/ModalNuevoServidor'; 
+import ModalAsignarUsuarios from '@/components/ui/ModalAsignarUsuarios';
 
 export default function ServersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [servers, setServers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Estado para el modal de umbrales
   const [servidorEditando, setServidorEditando] = useState<any | null>(null);
-
   const [mostrarModalNuevo, setMostrarModalNuevo] = useState(false); 
+  
+  const [usuario, setUsuario] = useState<any>(null);
+  const [servidorAsignando, setServidorAsignando] = useState<any | null>(null);
 
- // 1. Cargar servidores reales desde FastAPI con Token de Autorización
   const fetchServidores = async () => {
     try {
-      // Recuperamos el token del usuario logueado que guardaste en el login
       const token = localStorage.getItem('token'); 
-      
       const res = await fetch('http://127.0.0.1:8000/api/servidores/', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // <--- ¡AQUÍ ESTÁ LA MAGIA!
+          'Authorization': `Bearer ${token}` 
         }
       });
       
@@ -44,11 +42,50 @@ export default function ServersPage() {
     }
   };
 
+  // 🌟 NUEVA FUNCIÓN PARA DESCARGAR EL PDF
+  const handleDownloadPDF = async (servidorId: string, nombreServidor: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://127.0.0.1:8000/api/servidores/${servidorId}/reporte-pdf`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error("Error al descargar el PDF");
+      }
+
+      // Transformamos la respuesta del backend en un archivo Blob
+      const blob = await res.blob();
+      
+      // Creamos un enlace temporal en el navegador para forzar la descarga
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Reporte_${nombreServidor}.pdf`; // Nombre del archivo
+      document.body.appendChild(a);
+      a.click();
+      
+      // Limpiamos la basura temporal
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Error al generar el PDF:", error);
+      alert("Hubo un problema al generar el reporte PDF.");
+    }
+  };
+
   useEffect(() => {
     fetchServidores();
+    const userGuardado = localStorage.getItem('usuario');
+    if (userGuardado) {
+      setUsuario(JSON.parse(userGuardado));
+    }
   }, []);
 
-  // Filtrar servidores según la búsqueda
   const filteredServers = servers.filter(srv => 
     srv.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     srv.ip_direccion?.includes(searchTerm) ||
@@ -64,13 +101,15 @@ export default function ServersPage() {
           <p className="text-text mt-1">Gestión, estado y configuración de los nodos de la infraestructura.</p>
         </div>
 
-        <button 
-          onClick={() => setMostrarModalNuevo(true)}
-          className="flex items-center justify-center gap-2 bg-main hover:bg-opacity-90 text-white px-4 py-2.5 rounded-lg font-medium transition-all shadow-sm"
-        >
-          <Plus size={18} />
-          <span>Añadir Servidor</span>
-        </button>
+        {usuario?.rol === 'admin' && (
+          <button 
+            onClick={() => setMostrarModalNuevo(true)}
+            className="flex items-center justify-center gap-2 bg-main hover:bg-opacity-90 text-white px-4 py-2.5 rounded-lg font-medium transition-all shadow-sm"
+          >
+            <Plus size={18} />
+            <span>Añadir Servidor</span>
+          </button>
+        )}
       </header>
 
       {/* Barra de Búsqueda y Filtros Rápidos */}
@@ -151,15 +190,43 @@ export default function ServersPage() {
                       </span>
                     </td>
                     <td className="py-4 px-6 text-right">
-                      {/* BOTÓN DE CONFIGURACIÓN DE UMBRALES */}
+                    <div className="flex items-center justify-end gap-2">
+                      
+                      {/* 🌟 NUEVO BOTÓN: PDF (Disponible para todos) */}
                       <button 
-                        onClick={() => setServidorEditando(srv)}
-                        title="Configurar Umbrales"
-                        className="inline-flex items-center justify-center p-2 text-light hover:text-main hover:bg-body border border-transparent hover:border-border rounded-lg transition-colors shadow-sm"
+                        onClick={() => handleDownloadPDF(srv.id, srv.nombre)}
+                        title="Descargar Reporte PDF"
+                        className="inline-flex items-center justify-center p-2 text-light hover:text-emerald-500 hover:bg-body border border-transparent hover:border-border rounded-lg transition-colors shadow-sm"
                       >
-                        <Settings size={18} />
+                        <FileText size={18} />
                       </button>
-                    </td>
+
+                      {/* Botones exclusivos de Administrador */}
+                      {usuario?.rol === 'admin' ? (
+                        <>
+                          <button 
+                            onClick={() => setServidorEditando(srv)}
+                            title="Configurar Umbrales"
+                            className="inline-flex items-center justify-center p-2 text-light hover:text-main hover:bg-body border border-transparent hover:border-border rounded-lg transition-colors shadow-sm"
+                          >
+                            <Settings size={18} />
+                          </button>
+                          
+                          <button 
+                            onClick={() => setServidorAsignando(srv)}
+                            title="Asignar Usuarios"
+                            className="inline-flex items-center justify-center p-2 text-light hover:text-blue-500 hover:bg-body border border-transparent hover:border-border rounded-lg transition-colors shadow-sm"
+                          >
+                            <Users size={18} />
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-light italic bg-body px-2 py-1 rounded">
+                          Solo lectura
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   </tr>
                 ))
               )}
@@ -168,7 +235,7 @@ export default function ServersPage() {
         </div>
       </div>
 
-      {/* RENDERIZADO DEL MODAL */}
+      {/* RENDERIZADO DEL MODAL DE UMBRALES */}
       {servidorEditando && (
         <ModalUmbrales 
           servidorId={servidorEditando.id}
@@ -191,8 +258,17 @@ export default function ServersPage() {
         <ModalNuevoServidor 
           onClose={() => setMostrarModalNuevo(false)}
           onSuccess={() => {
-            fetchServidores(); // Refrescamos la tabla para ver el nuevo servidor
+            fetchServidores();
           }}
+        />
+      )}
+
+      {/* 🌟 NUEVO MODAL DE ASIGNAR USUARIOS */}
+      {servidorAsignando && (
+        <ModalAsignarUsuarios
+          servidorId={servidorAsignando.id}
+          nombreServidor={servidorAsignando.nombre}
+          onClose={() => setServidorAsignando(null)}
         />
       )}
     </div>

@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import psutil
@@ -28,6 +29,25 @@ def medir_latencia(host: str) -> float:
     except Exception:
         pass
     return 0.0
+
+# --- NUEVA FUNCIÓN PARA CALCULAR EL TAMAÑO DE CARPETAS ---
+def obtener_tamano_carpeta_gb(ruta_carpeta: str) -> float:
+    """Calcula el tamaño de una carpeta en Gigabytes. Devuelve 0.0 si no existe."""
+    total_size = 0
+    if not os.path.exists(ruta_carpeta):
+        return 0.0
+    
+    try:
+        # Recorremos recursivamente todos los archivos
+        for dirpath, dirnames, filenames in os.walk(ruta_carpeta):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                if not os.path.islink(fp):
+                    total_size += os.path.getsize(fp)
+    except PermissionError:
+        pass # Ignoramos carpetas a las que el usuario no tiene acceso
+        
+    return round(total_size / (1024**3), 2) # Convertimos bytes a GB
 
 
 # --- NUEVA: VENTANA DE CONFIGURACIÓN ---
@@ -117,7 +137,6 @@ class RecolectorThread(QThread):
         self.is_running = True
         self.is_paused = False
         
-        # Cargamos la configuración inicial
         self.settings = QSettings("MiTFG", "AgenteMonitorizacion")
         self.url = self.settings.value("api_url", "http://127.0.0.1:8000/api/metricas/")
         self.token = self.settings.value("token", "")
@@ -129,7 +148,6 @@ class RecolectorThread(QThread):
     def run(self):
         self.nuevo_log.emit("Iniciando servicio de recolección...")
         while self.is_running:
-            # Si no hay token, no hacemos nada y avisamos
             if not self.token:
                 self.nuevo_log.emit("⚠ Falta el Token. Ve a Configuración.")
                 time.sleep(5)
@@ -139,18 +157,38 @@ class RecolectorThread(QThread):
                 try:
                     cpu = psutil.cpu_percent(interval=1)
                     ram_mb = psutil.virtual_memory().used / (1024 * 1024)
+                    
+                    # 🌟 NUEVA LÓGICA DE DISCO
                     ruta_disco = 'C:\\' if platform.system().lower() == "windows" else '/'
-                    disco = psutil.disk_usage(ruta_disco).percent
+                    uso_disco = psutil.disk_usage(ruta_disco)
+                    disco_pct = uso_disco.percent
+                    
+                    # Rutas simuladas o reales para el TFG (ajustar según el SO)
+                    if platform.system().lower() == "windows":
+                        tamano_os = obtener_tamano_carpeta_gb("C:\\Windows")
+                        tamano_logs = obtener_tamano_carpeta_gb("C:\\Windows\\System32\\winevt\\Logs")
+                        tamano_db = 0.0 # Pon la ruta de PostgreSQL en Windows si la tienes
+                    else:
+                        tamano_os = obtener_tamano_carpeta_gb("/usr")
+                        tamano_logs = obtener_tamano_carpeta_gb("/var/log")
+                        tamano_db = obtener_tamano_carpeta_gb("/var/lib/postgresql")
+
+                    tamano_libre_gb = round(uso_disco.free / (1024**3), 2)
+                    
                     latencia = medir_latencia(HOST_PING)
                     
+                    # 🌟 AÑADIMOS LAS NUEVAS VARIABLES AL PAYLOAD
                     payload = {
                         "cpu_usage_pct": round(cpu, 2),
                         "ram_usage_mb": round(ram_mb, 2),
-                        "disk_usage_pct": round(disco, 2),
+                        "disk_usage_pct": round(disco_pct, 2),
+                        "disk_os_gb": tamano_os,
+                        "disk_db_gb": tamano_db,
+                        "disk_logs_gb": tamano_logs,
+                        "disk_free_gb": tamano_libre_gb,
                         "network_latency_ms": latencia
                     }
                     
-                    # Usamos el token dinámico en cada petición
                     headers = {
                         "x-server-token": self.token,
                         "Content-Type": "application/json"
@@ -158,14 +196,13 @@ class RecolectorThread(QThread):
                     
                     response = requests.post(self.url, json=payload, headers=headers)
                     if response.status_code == 201:
-                        self.nuevo_log.emit(f"OK | CPU: {cpu}% | RAM: {ram_mb:.0f}MB | Red: {latencia}ms")
+                        self.nuevo_log.emit(f"OK | CPU: {cpu}% | RAM: {ram_mb:.0f}MB | DiscoLibre: {tamano_libre_gb}GB")
                     else:
                         self.nuevo_log.emit(f"ERROR | Código {response.status_code}. ¿Token inválido?")
                         
-                except Exception:
-                    self.nuevo_log.emit(f"ERROR | No hay conexión con el servidor (FastAPI apagado).")
+                except Exception as e:
+                    self.nuevo_log.emit(f"ERROR | Excepción: {e}")
             
-            # Bucle de espera interrumpible
             for _ in range(5):
                 if not self.is_running:
                     break

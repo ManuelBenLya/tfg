@@ -1,35 +1,42 @@
-version: '3.8'
-
 services:
-  # Base de Datos (Postgres + Timescale)
   db:
-    image: timescale/timescaledb:latest-pg15
-    container_name: monitorizacion_db
+    image: postgres:15-alpine
+    container_name: db
+    restart: always
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password_segura
-      POSTGRES_DB: sistema_it
+      POSTGRES_USER: db_user
+      POSTGRES_PASSWORD: db_password
+      POSTGRES_DB: app_db
     ports:
       - "5432:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
-    restart: unless-stopped
+      - postgres_data:/var/lib/postgresql/data
 
-  # API Central (FastAPI)
-  api:
+  backend:
     build: 
       context: ./backend
-    container_name: monitorizacion_api
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      dockerfile: Dockerfile
+    container_name: backend
+    restart: always
     ports:
       - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://admin:password_segura@db:5432/sistema_it
-    volumes:
-      - ./backend/app:/code/app
     depends_on:
       - db
-    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://db_user:db_password@db:5432/app_db
+    
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
 
 volumes:
-  db_data:
+  postgres_data:

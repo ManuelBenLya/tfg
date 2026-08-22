@@ -1,10 +1,10 @@
 "use client";
 
-
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield, Lock, Mail, ArrowRight } from 'lucide-react';
-import { loginAPI } from '@/services/authService'; // Ajusta la ruta si es necesario
+// 🌟 Asegúrate de tener getMeAPI exportado en tu authService
+import { loginAPI, getMeAPI } from '@/services/authService'; 
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,19 +19,22 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // Llamada real al backend de FastAPI
+      // 1. Pedimos el Token
       const data = await loginAPI(email, password);
       
       if (data.access_token) {
-        // Guardamos el token real que nos devuelve FastAPI
-        // Usamos 'token' como clave (asegúrate de que el interceptor de Axios busque esta misma clave)
         localStorage.setItem('token', data.access_token);
+        
+        // 2. 🌟 NUEVO: Usamos el token para pedir los datos del usuario (rol, empresa)
+        const userData = await getMeAPI(data.access_token);
+        
+        // Lo guardamos en formato texto (JSON) para que Next.js pueda leerlo
+        localStorage.setItem('usuario', JSON.stringify(userData));
         
         // Redirigimos al dashboard
         router.push('/dashboard');
       }
     } catch (err: any) {
-      // Si FastAPI devuelve un 401, caerá aquí
       if (err.response?.status === 401) {
         setError('Credenciales incorrectas. Comprueba tu correo y contraseña.');
       } else {

@@ -8,38 +8,62 @@ from app.schemas.servidor import ServidorCreate, ServidorResponse, UmbralesUpdat
 from app.crud import servidor as crud_servidor
 from app.api.deps import get_current_user
 from app.models.models import Usuario, Servidor, MetricaHardware
+from fastapi.responses import StreamingResponse
+from app.services.pdf_generator import crear_reporte_pdf
+
+from pydantic import BaseModel
+from uuid import UUID
 
 router = APIRouter(tags=["Servidores"])
+
 
 @router.post("/", response_model=ServidorResponse, status_code=status.HTTP_201_CREATED)
 def crear_servidor(
     servidor: ServidorCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user) # 🔒 ¡Ruta protegida!
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
-    Registra un nuevo servidor en la infraestructura. Devuelve el token generado.
+    Solo los ADMINISTRADORES pueden registrar un nuevo servidor.
     """
-    return crud_servidor.create_servidor(db=db, servidor=servidor)
+    # 1. Verificamos que sea admin
+    if current_user.rol != "admin":
+        raise HTTPException(status_code=403, detail="No tienes permisos para crear servidores.")
+
+    # 2. 🌟 Pasamos el empresa_id al CRUD para que Postgres no se queje
+    nuevo_servidor = crud_servidor.create_servidor(
+        db=db, 
+        servidor=servidor, 
+        empresa_id=current_user.empresa_id
+    )
+    
+    # 3. VINCULACIÓN AUTOMÁTICA: Añadimos al admin a la tabla intermedia
+    nuevo_servidor.usuarios_con_acceso.append(current_user)
+    db.commit()
+    db.refresh(nuevo_servidor)
+    
+    return nuevo_servidor
+
+    
 
 @router.get("/", response_model=List[ServidorResponse])
 def listar_servidores(
     skip: int = 0, 
     limit: int = 100, 
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user) # 🔒 ¡Ruta protegida!
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
-    Lista todos los servidores registrados en el sistema y actualiza 
-    dinámicamente su estado (Online/Offline) basándose en su última métrica.
+    Devuelve SOLO los servidores a los que este usuario tiene acceso 
+    (gracias a la tabla intermedia), y actualiza su estado.
     """
-    # 1. Obtenemos los servidores con tu función CRUD
-    servidores = crud_servidor.get_servidores(db, skip=skip, limit=limit)
+    # 🔒 REGLA 2: Visibilidad granular
+    # En lugar de pedir todos al CRUD, sacamos solo los que tiene asignados este usuario
+    servidores = current_user.servidores_supervisados
     
-    # 2. Límite de 15 segundos para considerar que se ha caído
     limite_tiempo = datetime.utcnow() - timedelta(seconds=15)
     
-    # 3. Comprobación perezosa (Lazy Validation)
+    # Comprobación perezosa (Lazy Validation)
     for servidor in servidores:
         ultima_metrica = (
             db.query(MetricaHardware)
@@ -55,32 +79,110 @@ def listar_servidores(
         else:
             servidor.estado = "Online"
             
-    # 4. Guardamos los cambios en PostgreSQL
     db.commit()
-    
-    # 5. Devolvemos la lista actualizada al frontend
     return servidores
 
 @router.patch("/{servidor_id}/umbrales")
 def actualizar_umbrales(
     servidor_id: str, 
     umbrales: UmbralesUpdate, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user) # 🔒 Añadimos current_user
 ):
     """
-    Actualiza los umbrales de alerta estáticos de un servidor específico.
+    Solo un ADMINISTRADOR que tenga acceso a este servidor puede modificar umbrales.
     """
-    servidor = db.query(Servidor).filter(Servidor.id == servidor_id).first()
+    # 🔒 REGLA 3: Solo admins modifican umbrales
+    if current_user.rol != "admin":
+        raise HTTPException(status_code=403, detail="No tienes permisos para modificar umbrales.")
+
+    # Buscamos el servidor, comprobando que el admin realmente tiene acceso a él
+    servidor = db.query(Servidor).filter(
+        Servidor.id == servidor_id,
+        Servidor.usuarios_con_acceso.any(id=current_user.id) # Magia de SQLAlchemy
+    ).first()
     
     if not servidor:
-        raise HTTPException(status_code=404, detail="Servidor no encontrado")
+        raise HTTPException(status_code=404, detail="Servidor no encontrado o sin acceso.")
         
-    # Actualizamos los valores
     servidor.umbral_cpu = umbrales.umbral_cpu
     servidor.umbral_ram = umbrales.umbral_ram
     servidor.umbral_disco = umbrales.umbral_disco
     servidor.umbral_red = umbrales.umbral_red
     
     db.commit()
-    
     return {"mensaje": "Umbrales actualizados correctamente"}
+
+
+
+class AsignarUsuariosRequest(BaseModel):
+    usuario_ids: List[UUID]
+
+@router.post("/{servidor_id}/asignar-usuarios")
+def asignar_usuarios_a_servidor(
+    servidor_id: str,
+    request: AsignarUsuariosRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Asigna qué usuarios pueden ver un servidor específico.
+    """
+    if current_user.rol != "admin":
+        raise HTTPException(status_code=403, detail="No tienes permisos.")
+
+    # 1. Buscamos el servidor asegurándonos de que pertenece a la empresa del Admin
+    servidor = db.query(Servidor).filter(
+        Servidor.id == servidor_id,
+        Servidor.empresa_id == current_user.empresa_id
+    ).first()
+
+    if not servidor:
+        raise HTTPException(status_code=404, detail="Servidor no encontrado.")
+
+    # 2. Buscamos a los usuarios que el admin quiere asignar (verificando que son de su empresa)
+    usuarios_a_asignar = db.query(Usuario).filter(
+        Usuario.id.in_(request.usuario_ids),
+        Usuario.empresa_id == current_user.empresa_id
+    ).all()
+
+    # 3. 🌟 MAGIA DE SQLALCHEMY: Sobrescribimos la lista. 
+    # SQLAlchemy borrará e insertará en la tabla 'usuario_servidor' automáticamente.
+    servidor.usuarios_con_acceso = usuarios_a_asignar
+    db.commit()
+
+    return {"mensaje": "Accesos actualizados correctamente"}
+
+
+@router.get("/{servidor_id}/reporte-pdf")
+def descargar_reporte_pdf(
+    servidor_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    # 1. Buscamos el servidor y verificamos permisos (que sea de la empresa)
+    servidor = db.query(Servidor).filter(
+        Servidor.id == servidor_id,
+        Servidor.empresa_id == current_user.empresa_id
+    ).first()
+
+    if not servidor:
+        raise HTTPException(status_code=404, detail="Servidor no encontrado")
+
+    # 2. Simulamos las métricas medias (aquí en el futuro consultarás tu tabla de métricas)
+    # Por ahora le pasamos datos dummy para probar
+    metricas_resumen = {
+        "cpu_avg": 92.5,  # Forzamos un valor alto para que salte la regla del motor
+        "ram_avg": 45.0,
+        "disco_avg": 80.0
+    }
+
+    # 3. Generamos el PDF en memoria
+    pdf_buffer = crear_reporte_pdf(servidor, metricas_resumen, current_user.email)
+
+    # 4. Lo devolvemos al frontend como un archivo descargable
+    headers = {
+        'Content-Disposition': f'attachment; filename="Reporte_{servidor.nombre}.pdf"'
+    }
+    
+    return StreamingResponse(pdf_buffer, media_type="application/pdf", headers=headers)

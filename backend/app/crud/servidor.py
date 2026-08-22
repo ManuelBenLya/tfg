@@ -4,9 +4,10 @@ import secrets
 from app.models.models import Servidor
 from app.schemas.servidor import ServidorCreate
 
-def create_servidor(db: Session, servidor: ServidorCreate):
+def create_servidor(db: Session, servidor: ServidorCreate, empresa_id: str):
     """
-    Crea un servidor nuevo generando un token de autenticación único y seguro.
+    Crea un servidor nuevo generando un token de autenticación único y seguro,
+    y lo vincula a la empresa del administrador.
     """
     # Generamos un token aleatorio de 32 bytes en formato URL safe
     token_seguro = secrets.token_urlsafe(32)
@@ -15,7 +16,8 @@ def create_servidor(db: Session, servidor: ServidorCreate):
         nombre=servidor.nombre,
         ip_direccion=servidor.ip_direccion,
         estado=servidor.estado,
-        token_auth=token_seguro
+        token_auth=token_seguro,
+        empresa_id=empresa_id  # Ahora Python sí sabe de dónde viene esta variable
     )
     
     db.add(db_servidor)

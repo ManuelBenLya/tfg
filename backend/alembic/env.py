@@ -12,7 +12,7 @@ sys.path.insert(0, dirname(dirname(abspath(__file__))))
 from app.db.database import Base
 from app.models import models
 
-
+import os
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -64,6 +64,8 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    db_url = os.getenv("DATABASE_URL", "postgresql://admin:password_segura@db:5432/sistema_it")
+    config.set_main_option("sqlalchemy.url", db_url)
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

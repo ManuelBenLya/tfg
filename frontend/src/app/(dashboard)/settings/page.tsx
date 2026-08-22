@@ -1,33 +1,97 @@
 "use client";
 
-import { useState } from 'react';
-import { Save, Bell, User, Monitor, Key, Mail, MessageSquare } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, Bell, User, Key, Mail, MessageSquare, Download, Terminal, Monitor } from 'lucide-react';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
-    // Preferencias
-    refreshInterval: '5',
-    theme: 'dark',
-    // Notificaciones
     emailNotifications: true,
-    emailAddress: 'admin@mitfg.es',
+    emailAddress: 'Cargando...', // Se llenará desde la API
     discordWebhook: '',
     slackWebhook: '',
+    rol: 'Cargando...'
   });
 
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // 🌟 FORMATEADOR DE URL A PRUEBA DE BALAS
+  // Quita las barras sobrantes y el /api final si existiera, asegurando una ruta limpia.
+  const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
+    .replace(/\/$/, '')
+    .replace(/\/api$/, '');
+
+  // 1. CARGAR LOS DATOS AL ABRIR LA PÁGINA
+  useEffect(() => {
+    const cargarAjustes = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const res = await fetch(`${API_BASE}/api/usuarios/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setSettings(prev => ({
+            ...prev,
+            emailAddress: data.email,
+            rol: data.rol === 'admin' ? 'Administrador' : data.rol === 'superadmin' ? 'Super Admin' : 'Usuario',
+            discordWebhook: data.discord_webhook || '',
+            slackWebhook: data.slack_webhook || '',
+          }));
+        }
+      } catch (error) {
+        console.error("Error al cargar ajustes:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargarAjustes();
+  }, [API_BASE]);
 
   const handleChange = (field: string, value: any) => {
     setSettings(prev => ({ ...prev, [field]: value }));
     setSaved(false);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  // 2. GUARDAR LOS DATOS EN LA BASE DE DATOS
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaved(true);
-    // Aquí en el futuro harías un fetch() a tu API para guardar estos datos
-    setTimeout(() => setSaved(false), 3000);
+    
+    try {
+      const token = localStorage.getItem('token');
+      
+      const res = await fetch(`${API_BASE}/api/usuarios/ajustes`, {
+        method: 'PUT',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          discord_webhook: settings.discordWebhook,
+          slack_webhook: settings.slackWebhook,
+          recibir_alertas_email: settings.emailNotifications
+        })
+      });
+
+      if (res.ok) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      } else {
+        alert("Error al guardar en la base de datos.");
+      }
+    } catch (error) {
+      console.error("Error al guardar:", error);
+      alert("Error de conexión con el servidor.");
+    }
   };
+
+  if (loading) {
+    return <div className="p-8 text-light text-sm animate-pulse">Cargando configuración...</div>;
+  }
 
   return (
     <div className="space-y-6 max-w-4xl pb-10">
@@ -35,7 +99,7 @@ export default function SettingsPage() {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-title">Ajustes de la Plataforma</h1>
-          <p className="text-text mt-1">Configuración de usuario, interfaz y canales de alerta.</p>
+          <p className="text-text mt-1">Configuración de usuario, y canales de alerta.</p>
         </div>
 
         <button 
@@ -71,7 +135,7 @@ export default function SettingsPage() {
               <input 
                 type="email"
                 disabled
-                value="admin@sistema.local"
+                value={settings.emailAddress}
                 className="w-full bg-body/50 border border-border rounded-lg px-3.5 py-2 text-light text-sm font-mono cursor-not-allowed"
               />
               <p className="text-[10px] text-light mt-1">El email no se puede cambiar por motivos de seguridad.</p>
@@ -80,53 +144,13 @@ export default function SettingsPage() {
               <label className="block text-xs font-medium text-light uppercase mb-1.5">Rol en el Sistema</label>
               <div className="w-full bg-body border border-border rounded-lg px-3.5 py-2 text-title text-sm flex items-center gap-2">
                 <Key size={14} className="text-amber-500" />
-                <span className="font-medium text-amber-500">Administrador</span>
+                <span className="font-medium text-amber-500">{settings.rol}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* 2. PREFERENCIAS DE INTERFAZ */}
-        <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-5">
-          <div className="flex items-center gap-3 pb-3 border-b border-border">
-            <span className="p-2 bg-body rounded-lg text-main"><Monitor size={20} /></span>
-            <div>
-              <h2 className="text-lg font-semibold text-title">Preferencias de Interfaz</h2>
-              <p className="text-xs text-light">Comportamiento del panel de control de Next.js.</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-xs font-medium text-light uppercase mb-1.5">Refresco del Dashboard</label>
-              <select
-                value={settings.refreshInterval}
-                onChange={(e) => handleChange('refreshInterval', e.target.value)}
-                className="w-full bg-body border border-border rounded-lg px-3.5 py-2 text-title text-sm focus:outline-none focus:border-main"
-              >
-                <option value="5">Cada 5 segundos (Tiempo Real)</option>
-                <option value="15">Cada 15 segundos</option>
-                <option value="30">Cada 30 segundos</option>
-                <option value="60">Cada 1 minuto (Ahorro de recursos)</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-xs font-medium text-light uppercase mb-1.5">Tema Visual</label>
-              <select
-                value={settings.theme}
-                onChange={(e) => handleChange('theme', e.target.value)}
-                className="w-full bg-body border border-border rounded-lg px-3.5 py-2 text-title text-sm focus:outline-none focus:border-main"
-              >
-                <option value="dark">Modo Oscuro (Recomendado)</option>
-                <option value="light">Modo Claro</option>
-                <option value="system">Seguir preferencias del sistema</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. CANALES DE NOTIFICACIÓN EXTERNA */}
+        {/* 2. CANALES DE NOTIFICACIÓN EXTERNA */}
         <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-5">
           <div className="flex items-center gap-3 pb-3 border-b border-border">
             <span className="p-2 bg-body rounded-lg text-main"><Bell size={20} /></span>
@@ -137,7 +161,6 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-6">
-            {/* Correo Electrónico */}
             <div className="p-4 bg-body border border-border rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-start gap-3">
                 <Mail className="text-light mt-0.5" size={20} />
@@ -157,7 +180,6 @@ export default function SettingsPage() {
               </label>
             </div>
 
-            {/* Discord */}
             <div>
               <label className="flex items-center gap-2 text-xs font-medium text-light uppercase mb-1.5">
                 <MessageSquare size={14} /> Webhook de Discord
@@ -169,10 +191,8 @@ export default function SettingsPage() {
                 onChange={(e) => handleChange('discordWebhook', e.target.value)}
                 className="w-full bg-body border border-border rounded-lg px-3.5 py-2.5 text-title text-sm focus:outline-none focus:border-main font-mono placeholder:text-gray-500"
               />
-              <p className="text-[11px] text-light mt-1.5">El sistema enviará un mensaje automatizado al canal configurado en este webhook.</p>
             </div>
 
-            {/* Slack */}
             <div>
               <label className="flex items-center gap-2 text-xs font-medium text-light uppercase mb-1.5">
                 <MessageSquare size={14} /> Webhook de Slack
@@ -185,6 +205,47 @@ export default function SettingsPage() {
                 className="w-full bg-body border border-border rounded-lg px-3.5 py-2.5 text-title text-sm focus:outline-none focus:border-main font-mono placeholder:text-gray-500"
               />
             </div>
+          </div>
+        </div>
+
+        {/* 3. DESCARGA DEL AGENTE */}
+        <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-5">
+          <div className="flex items-center gap-3 pb-3 border-b border-border">
+            <span className="p-2 bg-body rounded-lg text-main"><Download size={20} /></span>
+            <div>
+              <h2 className="text-lg font-semibold text-title">Despliegue del Agente</h2>
+              <p className="text-xs text-light">Descarga los ejecutables para instalar en tus servidores objetivo.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <a 
+              href="/agente-linux" 
+              download="agente-linux"
+              className="flex items-center gap-4 bg-body hover:bg-border/50 border border-border rounded-lg p-4 transition-colors group cursor-pointer"
+            >
+              <div className="p-2.5 bg-surface rounded-md text-light group-hover:text-main transition-colors border border-border">
+                <Terminal size={24} />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-title">Linux (Debian/Mint)</p>
+                <p className="text-[11px] text-light mt-0.5">Binario ejecutable sin dependencias</p>
+              </div>
+            </a>
+
+            <a 
+              href="/agente.exe" 
+              download="agente.exe"
+              className="flex items-center gap-4 bg-body hover:bg-border/50 border border-border rounded-lg p-4 transition-colors group cursor-pointer"
+            >
+              <div className="p-2.5 bg-surface rounded-md text-light group-hover:text-main transition-colors border border-border">
+                <Monitor size={24} />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-title">Windows</p>
+                <p className="text-[11px] text-light mt-0.5">Archivo .exe (Bandeja del sistema)</p>
+              </div>
+            </a>
           </div>
         </div>
 

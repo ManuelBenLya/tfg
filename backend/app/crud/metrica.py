@@ -17,7 +17,11 @@ def create_metrica(db: Session, metrica: MetricaCreate, servidor_id: str):
         cpu_usage_pct=metrica.cpu_usage_pct,
         ram_usage_mb=metrica.ram_usage_mb,
         disk_usage_pct=metrica.disk_usage_pct,
-        network_latency_ms=metrica.network_latency_ms
+        network_latency_ms=metrica.network_latency_ms,
+        disk_os_gb=metrica.disk_os_gb,
+        disk_db_gb=metrica.disk_db_gb,
+        disk_logs_gb=metrica.disk_logs_gb,
+        disk_free_gb=metrica.disk_free_gb
     )
     
     db.add(db_metrica)

@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, status, Request
 from sqlalchemy.orm import Session
-from typing import List 
+from typing import List, Optional
+from datetime import datetime, timedelta
 
 from app.db.database import get_db
 from app.schemas.metrica import MetricaCreate, MetricaResponse
 from app.crud import metrica as crud_metrica
 from app.models.models import Servidor, MetricaHardware, Usuario, Alerta
 from app.api.deps import get_current_user 
-
 
 router = APIRouter(tags=["Métricas"])
 
@@ -28,26 +28,25 @@ def verificar_token_servidor(
     
     return servidor
 
-
     
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def registrar_metrica(
     metrica: MetricaCreate,
-    request: Request, # 🌟 NUEVO: FastAPI nos inyecta los datos de la conexión real
+    request: Request,
     servidor: Servidor = Depends(verificar_token_servidor), 
     db: Session = Depends(get_db)
 ):
     # Extraemos la IP real desde donde el agente está mandando los datos
     ip_real = request.client.host
 
-    # 🌟 NUEVO: Actualizamos el estado a Online Y la IP si ha cambiado
+    # Actualizamos el estado a Online Y la IP si ha cambiado
     ha_cambiado = False
     if servidor.estado != "Online":
         servidor.estado = "Online"
         ha_cambiado = True
         
     if servidor.ip_direccion != ip_real:
-        servidor.ip_direccion = ip_real # Auto-actualizamos la IP
+        servidor.ip_direccion = ip_real 
         ha_cambiado = True
         
     if ha_cambiado:
@@ -56,16 +55,13 @@ def registrar_metrica(
     # 1. Guardamos la métrica en la base de datos
     crud_metrica.create_metrica(db=db, metrica=metrica, servidor_id=servidor.id)
     
-    # 2. EVALUACIÓN DINÁMICA POR UMBRALES (A PRUEBA DE FALLOS)
+    # 2. EVALUACIÓN DINÁMICA POR UMBRALES
     mensaje_alerta = None
-    
-    # Extraemos los umbrales de la BD o aplicamos defaults seguros
     umbral_cpu = servidor.umbral_cpu or 90.0
     umbral_ram = servidor.umbral_ram or 16000.0
     umbral_disco = servidor.umbral_disco or 90.0
     umbral_red = servidor.umbral_red or 500.0
     
-    # Evaluamos asegurándonos de que la métrica tampoco sea nula
     if metrica.cpu_usage_pct is not None and metrica.cpu_usage_pct >= umbral_cpu:
         mensaje_alerta = f"Uso de CPU crítico: {metrica.cpu_usage_pct}% (Supera el umbral de {umbral_cpu}%)"
         
@@ -78,7 +74,7 @@ def registrar_metrica(
     elif metrica.network_latency_ms is not None and metrica.network_latency_ms >= umbral_red:
         mensaje_alerta = f"Latencia de red inusual: {metrica.network_latency_ms}ms (Supera el umbral de {umbral_red}ms)"
         
-    # 3. Guardar la alerta si se superó algún límite
+    # 3. Guardar la alerta
     if mensaje_alerta:
         nueva_alerta = Alerta(
             servidor_id=servidor.id,
@@ -104,28 +100,44 @@ def obtener_historial_metricas(
     metricas = (
         db.query(MetricaHardware)
         .filter(MetricaHardware.servidor_id == servidor_id)
-        .order_by(MetricaHardware.tiempo.desc()) # Pillamos las MÁS RECIENTES
+        .order_by(MetricaHardware.tiempo.desc())
         .limit(limit)
         .all()
     )
-    metricas.reverse() # Le damos la vuelta para que la gráfica avance hacia la derecha
+    metricas.reverse()
     return metricas
 
 
+# 🌟 EL NUEVO ENDPOINT UNIFICADO Y PROTEGIDO
 @router.get("/", response_model=List[MetricaResponse])
-def obtener_todas_las_metricas(
-    limit: int = 100,
+def obtener_metricas_globales(
+    rango: Optional[str] = '1h', 
+    servidor_id: Optional[int] = None, 
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(get_current_user) # 🔒 Protegido con token
 ):
     """
-    Recupera el historial global de todas las máquinas.
+    Devuelve las métricas de la infraestructura filtradas por un rango de tiempo.
     """
-    metricas = (
-        db.query(MetricaHardware)
-        .order_by(MetricaHardware.tiempo.desc()) # 🛠️ ¡AQUÍ ESTABA EL ERROR! Ahora es desc()
-        .limit(limit)
-        .all()
-    )
-    metricas.reverse() # Invertimos para orden cronológico correcto
+    ahora = datetime.utcnow()
+    
+    if rango == '15m':
+        fecha_limite = ahora - timedelta(minutes=15)
+    elif rango == '1h':
+        fecha_limite = ahora - timedelta(hours=1)
+    elif rango == '24h':
+        fecha_limite = ahora - timedelta(hours=24)
+    elif rango == '7d':
+        fecha_limite = ahora - timedelta(days=7)
+    else:
+        fecha_limite = ahora - timedelta(hours=1)
+
+    # 🌟 Usamos MetricaHardware que es tu modelo real
+    query = db.query(MetricaHardware).filter(MetricaHardware.tiempo >= fecha_limite)
+
+    if servidor_id:
+        query = query.filter(MetricaHardware.servidor_id == servidor_id)
+
+    metricas = query.order_by(MetricaHardware.tiempo.asc()).all()
+
     return metricas

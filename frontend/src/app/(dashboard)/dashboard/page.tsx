@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { ChevronDown, Monitor, Layers, Server, LogOut } from 'lucide-react';
+import { ChevronDown, Monitor, Layers, Server, LogOut, Clock } from 'lucide-react'; // 🌟 Añadido Clock
 import CpuChart from "../../../components/charts/CpuChart";
 import RamChart from "../../../components/charts/RamChart";
 import NetworkChart from "../../../components/charts/NetworkChart";
+import DiskChart from "../../../components/charts/DiskChart";
 import { getServidores } from '@/services/servidorService'; 
-import { getMetricas } from '@/services/metricaService';
 import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
@@ -17,6 +17,17 @@ export default function DashboardPage() {
   const [errorBackend, setErrorBackend] = useState('');
 
   const [resolucion, setResolucion] = useState<'segundos' | 'minutos'>('segundos');
+  
+  // 🌟 NUEVO ESTADO: Rango de tiempo seleccionado
+  const [rangoTiempo, setRangoTiempo] = useState('1h');
+
+  // Opciones del selector de tiempo
+  const opcionesTiempo = [
+    { valor: '15m', etiqueta: '15 Min' },
+    { valor: '1h', etiqueta: '1 Hora' },
+    { valor: '24h', etiqueta: '24 Horas' },
+    { valor: '7d', etiqueta: '7 Días' },
+  ];
 
   const filterOptions = [
     { id: 'all', name: 'Toda la Infraestructura', type: 'global', icon: Layers },
@@ -31,41 +42,50 @@ export default function DashboardPage() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedView, setSelectedView] = useState(filterOptions[0]);
 
+  // 🌟 MODIFICADO: Ahora el useEffect depende de rangoTiempo
   useEffect(() => {
     const cargarDatos = async () => {
       try {
-        const [dataServidores, dataMetricas] = await Promise.all([
-          getServidores(),
-          getMetricas()
-        ]);
+        const token = localStorage.getItem('token');
+        const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
+          .replace(/\/$/, '').replace(/\/api$/, '');
+
+        // 1. Cargamos los servidores
+        const dataServidores = await getServidores();
         
+        // 2. Cargamos las métricas con el rango de tiempo aplicado en la URL
+        const resMetricas = await fetch(`${API_BASE}/api/metricas/?rango=${rangoTiempo}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (resMetricas.ok) {
+          const dataMetricas = await resMetricas.json();
+          setMetricasReales(dataMetricas);
+        }
+
         setServidoresReales(dataServidores);
-        setMetricasReales(dataMetricas);
+        setErrorBackend('');
       } catch (err) {
         setErrorBackend('No se pudo conectar con la API.');
       }
     };
+
     cargarDatos();
 
+    // Se recarga cada 5 segundos
     const intervalo = setInterval(() => {
       cargarDatos();
     }, 5000);
 
     return () => clearInterval(intervalo);
-  }, []);
+  }, [rangoTiempo]); // 👈 Si cambia el rango, recarga instantáneamente los datos
 
   const vistaActual = filterOptions.find(opt => opt.id === selectedView.id) || filterOptions[0];
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    router.push('/login');
-  };
 
   const metricasFiltradas = vistaActual.id === 'all' 
     ? metricasReales 
     : metricasReales.filter(m => m.servidor_id === vistaActual.id);
 
-  // 1. AHORA CALCULAMOS LAS TRES MÉTRICAS A LA VEZ
   const agrupadoPorHora = metricasFiltradas.reduce((acc: any, metrica: any) => {
     const fecha = new Date(metrica.tiempo);
     
@@ -77,11 +97,9 @@ export default function DashboardPage() {
     const horaFormateada = fecha.toLocaleTimeString([], opcionesFecha);
     
     if (!acc[horaFormateada]) {
-      // Inicializamos contadores para las 3 métricas
       acc[horaFormateada] = { sumaCpu: 0, sumaRam: 0, sumaNetwork: 0, count: 0 };
     }
     acc[horaFormateada].sumaCpu += metrica.cpu_usage_pct;
-    // Pasamos la RAM de MB a GB
     acc[horaFormateada].sumaRam += (metrica.ram_usage_mb / 1024); 
     acc[horaFormateada].sumaNetwork += metrica.network_latency_ms;
     acc[horaFormateada].count += 1;
@@ -89,61 +107,90 @@ export default function DashboardPage() {
     return acc;
   }, {});
 
-  // 2. CREAMOS EL ARRAY UNIFICADO PARA LAS GRÁFICAS
   const datosGraficas = Object.keys(agrupadoPorHora).length > 0
     ? Object.keys(agrupadoPorHora).map(hora => {
         const datos = agrupadoPorHora[hora];
         return {
           time: hora,
           cpu: Number((datos.sumaCpu / datos.count).toFixed(1)),
-          ram: Number((datos.sumaRam / datos.count).toFixed(2)), // 2 decimales para los GB
+          ram: Number((datos.sumaRam / datos.count).toFixed(2)),
           network: Number((datos.sumaNetwork / datos.count).toFixed(1))
         };
       })
-    // Valores por defecto a cero si no hay datos
     : [{ time: '00:00', cpu: 0, ram: 0, network: 0 }, { time: '00:01', cpu: 0, ram: 0, network: 0 }]; 
 
   const cpuActual = datosGraficas[datosGraficas.length - 1]?.cpu || 0;
+  const ultimaMetrica = metricasFiltradas[metricasFiltradas.length - 1];
+
+  const datosDisco = ultimaMetrica ? [
+    { name: 'Sistema Operativo', value: Number(ultimaMetrica.disk_os_gb || 0) },
+    { name: 'Bases de Datos', value: Number(ultimaMetrica.disk_db_gb || 0) },
+    { name: 'Archivos de Log', value: Number(ultimaMetrica.disk_logs_gb || 0) },
+    { name: 'Espacio Libre', value: Number(ultimaMetrica.disk_free_gb || 100) }
+  ] : [];
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-title">Resumen del Sistema</h1>
           <p className="text-text mt-2">Visión general de la infraestructura monitorizada.</p>
         </div>
 
-        <div className="relative">
-          <button 
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-3 bg-surface border border-border px-4 py-2.5 rounded-lg shadow-sm hover:border-main transition-colors text-title min-w-[250px] justify-between"
-          >
-            <div className="flex items-center gap-2">
-              <vistaActual.icon size={18} className="text-main" />
-              <span className="font-medium">{vistaActual.name}</span>
-            </div>
-            <ChevronDown size={18} className={`text-light transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-          </button>
+        {/* 🌟 SELECTORES EN LA CABECERA */}
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          
+          {/* Selector de Rango de Tiempo */}
+          <div className="flex items-center bg-surface border border-border rounded-lg p-1 shadow-sm w-full sm:w-auto">
+            <Clock size={16} className="text-light mx-2" />
+            {opcionesTiempo.map((opcion) => (
+              <button
+                key={opcion.valor}
+                onClick={() => setRangoTiempo(opcion.valor)}
+                className={`px-3 py-2 text-xs font-medium rounded-md transition-all flex-1 sm:flex-none ${
+                  rangoTiempo === opcion.valor
+                    ? 'bg-body text-main shadow-sm border border-border' // Activo
+                    : 'text-light hover:text-title hover:bg-body/50' // Inactivo
+                }`}
+              >
+                {opcion.etiqueta}
+              </button>
+            ))}
+          </div>
 
-          {isDropdownOpen && (
-            <div className="absolute right-0 top-full mt-2 w-full bg-surface border border-border rounded-lg shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
-              {filterOptions.map((option) => (
-                <button
-                  key={option.id}
-                  onClick={() => {
-                    setSelectedView(option);
-                    setIsDropdownOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-body
-                    ${vistaActual.id === option.id ? 'bg-body text-main font-medium border-l-2 border-main' : 'text-text border-l-2 border-transparent'}
-                  `}
-                >
-                  <option.icon size={18} className={vistaActual.id === option.id ? 'text-main' : 'text-light'} />
-                  {option.name}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Selector de Servidor Original */}
+          <div className="relative w-full sm:w-auto">
+            <button 
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="flex items-center gap-3 bg-surface border border-border px-4 py-2.5 rounded-lg shadow-sm hover:border-main transition-colors text-title min-w-[250px] justify-between w-full"
+            >
+              <div className="flex items-center gap-2">
+                <vistaActual.icon size={18} className="text-main" />
+                <span className="font-medium">{vistaActual.name}</span>
+              </div>
+              <ChevronDown size={18} className={`text-light transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isDropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-full bg-surface border border-border rounded-lg shadow-lg overflow-hidden z-20 max-h-64 overflow-y-auto">
+                {filterOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => {
+                      setSelectedView(option);
+                      setIsDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-body
+                      ${vistaActual.id === option.id ? 'bg-body text-main font-medium border-l-2 border-main' : 'text-text border-l-2 border-transparent'}
+                    `}
+                  >
+                    <option.icon size={18} className={vistaActual.id === option.id ? 'text-main' : 'text-light'} />
+                    {option.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -239,22 +286,30 @@ export default function DashboardPage() {
           </div>
         </div>
         
-        {/* Pasamos el array general */}
         <CpuChart data={datosGraficas} />
       </div>
 
       {/* Gráficas secundarias */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-surface p-6 rounded-xl border border-border shadow-sm transition-colors duration-200">
           <h3 className="text-title font-semibold text-lg">Distribución de Memoria RAM (GB)</h3>
-          {/* NUEVO: Le pasamos los datos a RamChart */}
           <RamChart data={datosGraficas} />
         </div>
         
         <div className="bg-surface p-6 rounded-xl border border-border shadow-sm transition-colors duration-200">
           <h3 className="text-title font-semibold text-lg">Tráfico de Red (ms)</h3>
-          {/* NUEVO: Le pasamos los datos a NetworkChart */}
           <NetworkChart data={datosGraficas} />
+        </div>
+
+        <div className="bg-surface p-6 rounded-xl border border-border shadow-sm transition-colors duration-200">
+          <h3 className="text-title font-semibold text-lg">Almacenamiento de Disco</h3>
+          {datosDisco.length > 0 ? (
+            <DiskChart data={datosDisco} />
+          ) : (
+            <div className="flex h-64 items-center justify-center text-light text-sm">
+              Esperando datos del servidor...
+            </div>
+          )}
         </div>
       </div>
     </div>
