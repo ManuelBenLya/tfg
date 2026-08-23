@@ -14,7 +14,7 @@ SQLALCHEMY_DATABASE_URL = os.getenv(
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 
 # SessionLocal para abrir sesiones temporales con la BD
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
 
 # Base es la clase madre de la que heredarán todos tus modelos
 Base = declarative_base()
