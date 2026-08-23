@@ -68,8 +68,12 @@ def crear_servidor(
         admin=current_user
     )
     
+    # EL TRUCO INFALIBLE: 
+    # Leemos la propiedad de la relación para forzar a SQLAlchemy 
+    # a traerla de Supabase antes de que FastAPI genere el JSON de respuesta.
+    _ = nuevo_servidor.usuarios_con_acceso
+    
     return nuevo_servidor
-
 
 @router.get("/", response_model=List[ServidorResponse])
 def listar_servidores(
