@@ -61,6 +61,7 @@ def crear_servidor(
     Solo los ADMINISTRADORES pueden registrar un nuevo servidor.
     La creación y la asignación de acceso al admin se hacen en una sola transacción.
     """
+    # 1. Creamos el servidor usando tu CRUD normal
     nuevo_servidor = crud_servidor.create_servidor(
         db=db, 
         servidor=servidor, 
@@ -68,12 +69,14 @@ def crear_servidor(
         admin=current_user
     )
     
-    # EL TRUCO INFALIBLE: 
-    # Leemos la propiedad de la relación para forzar a SQLAlchemy 
-    # a traerla de Supabase antes de que FastAPI genere el JSON de respuesta.
-    _ = nuevo_servidor.usuarios_con_acceso
+    # 2. EL COMODÍN DEFINITIVO:
+    # Volvemos a buscar el servidor recién guardado usando la sesión activa.
+    # Esto genera un objeto 100% fresco y elimina cualquier problema de 'DetachedInstance'.
+    servidor_fresco = db.query(Servidor).filter(Servidor.id == nuevo_servidor.id).first()
     
-    return nuevo_servidor
+    # 3. Devolvemos el servidor fresco a FastAPI. 
+    # Al estar atado a la sesión, FastAPI podrá leer 'usuarios_con_acceso' sin problemas.
+    return servidor_fresco
 
 @router.get("/", response_model=List[ServidorResponse])
 def listar_servidores(
