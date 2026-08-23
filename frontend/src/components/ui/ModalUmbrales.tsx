@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Settings, X, Save } from 'lucide-react';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 interface UmbralesProps {
   servidorId: string;
   nombreServidor: string;
@@ -23,7 +25,7 @@ export default function ModalUmbrales({ servidorId, nombreServidor, umbralesActu
     setIsSaving(true);
     
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/servidores/${servidorId}/umbrales`, {
+      const res = await fetch(`${API_BASE}/api/servidores/${servidorId}/umbrales`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

@@ -6,6 +6,8 @@ import ModalUmbrales from '@/components/ui/ModalUmbrales';
 import ModalNuevoServidor from '@/components/ui/ModalNuevoServidor'; 
 import ModalAsignarUsuarios from '@/components/ui/ModalAsignarUsuarios';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 export default function ServersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [servers, setServers] = useState<any[]>([]);
@@ -20,7 +22,7 @@ export default function ServersPage() {
   const fetchServidores = async () => {
     try {
       const token = localStorage.getItem('token'); 
-      const res = await fetch('http://127.0.0.1:8000/api/servidores/', {
+      const res = await fetch(`${API_BASE}/api/servidores/`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -44,7 +46,7 @@ export default function ServersPage() {
   const handleDownloadPDF = async (servidorId: string, nombreServidor: string) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/api/servidores/${servidorId}/reporte-pdf`, {
+      const res = await fetch(`${API_BASE}/api/servidores/${servidorId}/reporte-pdf`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -74,7 +76,7 @@ export default function ServersPage() {
     }
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/api/servidores/${servidorId}`, {
+      const res = await fetch(`${API_BASE}/api/servidores/${servidorId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -96,7 +98,7 @@ export default function ServersPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/api/servidores/${servidorId}`, {
+      const res = await fetch(`${API_BASE}/api/servidores/${servidorId}`, {
         method: 'PUT',
         headers: { 
           'Authorization': `Bearer ${token}`,

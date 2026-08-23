@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Creamos la instancia base apuntando a tu FastAPI
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api', 
+  baseURL: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api`, 
 });
 
 // Este "interceptor" se ejecuta antes de cada petición

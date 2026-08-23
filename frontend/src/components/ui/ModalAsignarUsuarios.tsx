@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { X, Users, Loader2, Check } from 'lucide-react';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 interface ModalAsignarUsuariosProps {
   servidorId: string;
   nombreServidor: string;
@@ -24,7 +26,7 @@ export default function ModalAsignarUsuarios({ servidorId, nombreServidor, usuar
         const token = localStorage.getItem('token');
         
         // 1. Obtenemos TODOS los empleados de la empresa
-        const resEmpleados = await fetch('http://127.0.0.1:8000/api/usuarios/empleados', {
+        const resEmpleados = await fetch(`${API_BASE}/api/usuarios/empleados`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const dataEmpleados = await resEmpleados.json();
@@ -55,7 +57,7 @@ export default function ModalAsignarUsuarios({ servidorId, nombreServidor, usuar
     setSaving(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://127.0.0.1:8000/api/servidores/${servidorId}/asignar-usuarios`, {
+      const res = await fetch(`${API_BASE}/api/servidores/${servidorId}/asignar-usuarios`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

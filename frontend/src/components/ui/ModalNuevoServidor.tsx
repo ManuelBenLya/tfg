@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Server, X, Plus, Copy, CheckCircle2, AlertCircle } from 'lucide-react';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 interface ModalNuevoServidorProps {
   onClose: () => void;
   onSuccess: () => void;
@@ -22,7 +24,7 @@ export default function ModalNuevoServidor({ onClose, onSuccess }: ModalNuevoSer
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://127.0.0.1:8000/api/servidores/', {
+      const res = await fetch(`${API_BASE}/api/servidores/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
