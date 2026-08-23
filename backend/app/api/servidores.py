@@ -50,18 +50,13 @@ def get_servidor_permitido(
         raise HTTPException(status_code=404, detail="Servidor no encontrado o sin acceso.")
     return servidor
 
-
 @router.post("/", response_model=ServidorResponse, status_code=status.HTTP_201_CREATED)
 def crear_servidor(
     servidor: ServidorCreate,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_admin)
 ):
-    """
-    Solo los ADMINISTRADORES pueden registrar un nuevo servidor.
-    La creación y la asignación de acceso al admin se hacen en una sola transacción.
-    """
-    # 1. Creamos el servidor usando tu CRUD normal
+    # 1. Creamos el servidor (Tu CRUD devuelve aquí el token en TEXTO PLANO)
     nuevo_servidor = crud_servidor.create_servidor(
         db=db, 
         servidor=servidor, 
@@ -69,13 +64,15 @@ def crear_servidor(
         admin=current_user
     )
     
-    # 2. EL COMODÍN DEFINITIVO:
-    # Volvemos a buscar el servidor recién guardado usando la sesión activa.
-    # Esto genera un objeto 100% fresco y elimina cualquier problema de 'DetachedInstance'.
+    # 2. SALVAMOS EL TOKEN PLANO en una variable antes del refresco
+    token_limpio = nuevo_servidor.token_auth
+    
+    # 3. Hacemos el refresco absoluto para evitar el DetachedInstanceError
     servidor_fresco = db.query(Servidor).filter(Servidor.id == nuevo_servidor.id).first()
     
-    # 3. Devolvemos el servidor fresco a FastAPI. 
-    # Al estar atado a la sesión, FastAPI podrá leer 'usuarios_con_acceso' sin problemas.
+    # 4. Volvemos a inyectarle el token limpio a la respuesta final
+    servidor_fresco.token_auth = token_limpio
+    
     return servidor_fresco
 
 @router.get("/", response_model=List[ServidorResponse])

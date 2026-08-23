@@ -246,8 +246,7 @@ class RecolectorThread(QThread):
                         lib_gb = disco_principal["free_gb"] if disco_principal else 0.0
                         self.nuevo_log.emit(f"OK | CPU: {cpu}% | RAM: {ram_mb:.0f}MB | DiscoLibre: {lib_gb}GB")
                     else:
-                        self.nuevo_log.emit(f"ERROR | Código {response.status_code}. ¿Token inválido?")
-                        
+                        self.nuevo_log.emit(f"ERROR 422 | {response.text}")                     
                 except Exception as e:
                     self.nuevo_log.emit(f"ERROR | Excepción: {e}")
             
