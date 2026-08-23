@@ -1,0 +1,233 @@
+from fastapi import APIRouter, Depends, HTTPException, status, Header
+from sqlalchemy.orm import Session
+from fastapi.security import OAuth2PasswordRequestForm
+from datetime import timedelta
+import os
+
+# Importaciones de tu base de datos y seguridad
+from app.db.database import SessionLocal
+from app.schemas.usuario import UsuarioCreate, UsuarioResponse, Token, RegistroEmpresaCreate, AjustesUpdate
+from app.crud import usuario as crud_usuario
+from app.core.security import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.core.security import get_password_hash 
+from app.api.deps import get_current_user, require_admin
+from app.models.models import Usuario, Empresa
+from app.models.enums import RolUsuario
+from typing import List
+
+router = APIRouter()
+MASTER_SECRET_KEY = os.getenv("MASTER_SECRET_KEY", "clave-maestra-tfg-2026-secure")
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# -------------------------------------------------------------------
+# 1. REGISTRO MAESTRO (SOLO SUPERADMIN PLATAFORMA)
+# -------------------------------------------------------------------
+@router.post("/crear-empresa-master", status_code=status.HTTP_201_CREATED)
+def crear_empresa_por_superadmin(
+    datos: RegistroEmpresaCreate,
+    x_master_key: str = Header(...), # 🌟 Exigimos la cabecera secreta
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint exclusivo para el Superadmin de la plataforma. 
+    Permite dar de alta una nueva empresa y a su Administrador raíz 
+    mediante una clave maestra de infraestructura.
+    """
+    # 1. Validar la llave maestra
+    if x_master_key != MASTER_SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Acceso denegado: Clave maestra de plataforma inválida."
+        )
+
+    # 2. Comprobar si el email ya existe
+    if crud_usuario.get_usuario_by_email(db, email=datos.email):
+        raise HTTPException(status_code=400, detail="El email del administrador ya está registrado.")
+
+    # 3. Comprobar si la empresa ya existe
+    empresa_existente = db.query(Empresa).filter(Empresa.nombre == datos.nombre_empresa).first()
+    if empresa_existente:
+        raise HTTPException(status_code=400, detail="El nombre de la empresa ya está en uso.")
+
+    # 4. Crear la Empresa
+    nueva_empresa = Empresa(nombre=datos.nombre_empresa)
+    db.add(nueva_empresa)
+    db.flush()
+
+    # 5. Crear el Usuario Administrador vinculado
+    nuevo_admin = Usuario(
+        email=datos.email,
+        password_hash=get_password_hash(datos.password),
+        rol=RolUsuario.ADMIN,
+        empresa_id=nueva_empresa.id
+    )
+    db.add(nuevo_admin)
+    db.commit()
+
+    return {
+        "mensaje": f"Empresa '{nueva_empresa.nombre}' creada con éxito.",
+        "admin_email": nuevo_admin.email,
+        "empresa_id": nueva_empresa.id
+    }
+
+# -------------------------------------------------------------------
+# 2. CREACIÓN DE EMPLEADOS (SOLO ADMINS)
+# -------------------------------------------------------------------
+@router.post("/empleados", status_code=status.HTTP_201_CREATED)
+def crear_empleado(
+    usuario: UsuarioCreate, 
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_admin)
+):
+    """
+    Permite a un Administrador crear cuentas para su equipo.
+    Los nuevos usuarios se asignan automáticamente a la empresa del Administrador.
+    """
+        
+    # 2. Comprobar si el email ya existe
+    if crud_usuario.get_usuario_by_email(db, email=usuario.email):
+        raise HTTPException(status_code=400, detail="Este email ya está registrado.")
+        
+    # 3. Crear el nuevo usuario
+    nuevo_usuario = Usuario(
+        email=usuario.email,
+        password_hash=get_password_hash(usuario.password),
+        rol=usuario.rol, # "admin" o "usuario" (según lo que envíe el formulario)
+        empresa_id=current_user.empresa_id # 🌟 Se le inyecta la empresa de su jefe
+    )
+    
+    db.add(nuevo_usuario)
+    db.commit()
+    
+    return {"mensaje": f"Usuario {usuario.email} añadido a tu equipo."}
+
+
+# -------------------------------------------------------------------
+# 3. LOGIN Y PERFIL (TUS ENDPOINTS ORIGINALES INTACTOS)
+# -------------------------------------------------------------------
+@router.post("/login", response_model=Token)
+def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint para iniciar sesión. Recibe credenciales y devuelve un JWT.
+    """
+    usuario = crud_usuario.authenticate_usuario(
+        db, email=form_data.username, password=form_data.password
+    )
+    
+    if not usuario:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Correo electrónico o contraseña incorrectos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    access_token = create_access_token(
+        data={"sub": usuario.email}, expires_delta=access_token_expires
+    )
+    
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.get("/me", response_model=UsuarioResponse)
+def read_users_me(current_user: Usuario = Depends(get_current_user)):
+    """
+    Devuelve los datos del usuario actualmente autenticado.
+    """
+    return current_user
+
+
+
+@router.get("/empleados", response_model=List[UsuarioResponse])
+def listar_empleados(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_admin)
+):
+    """
+    Devuelve todos los usuarios que pertenecen a la misma empresa que el Administrador.
+    """
+        
+    usuarios = db.query(Usuario).filter(Usuario.empresa_id == current_user.empresa_id).all()
+    return usuarios
+
+
+@router.put("/ajustes")
+def actualizar_ajustes(
+    ajustes: AjustesUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Actualiza las preferencias y webhooks de alerta del usuario autenticado.
+    """
+    # Si tus columnas en la base de datos se llaman así, las actualizamos:
+    if hasattr(current_user, "discord_webhook"):
+        current_user.discord_webhook = ajustes.discord_webhook
+    if hasattr(current_user, "slack_webhook"):
+        current_user.slack_webhook = ajustes.slack_webhook
+        
+    db.commit()
+    db.refresh(current_user)
+    
+    return {"mensaje": "Ajustes actualizados correctamente"}
+
+
+# -------------------------------------------------------------------
+# BORRAR EMPRESA (SOLO SUPERADMIN PLATAFORMA)
+# -------------------------------------------------------------------
+@router.delete("/empresa-master/{empresa_id}", status_code=status.HTTP_200_OK)
+def eliminar_empresa_por_superadmin(
+    empresa_id: str, # 🌟 CAMBIADO de int a str (porque es un UUID)
+    x_master_key: str = Header(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint exclusivo para el Superadmin.
+    Elimina una empresa y, por cascada, todos sus usuarios, servidores y métricas.
+    """
+    if x_master_key != MASTER_SECRET_KEY:
+        raise HTTPException(status_code=403, detail="Clave maestra de plataforma inválida.")
+    
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada.")
+        
+    db.delete(empresa)
+    db.commit()
+    return {"mensaje": f"Empresa '{empresa.nombre}' y toda su infraestructura asociada han sido eliminadas."}
+
+
+# -------------------------------------------------------------------
+# ELIMINAR EMPLEADO (SOLO ADMIN DE LA EMPRESA)
+# -------------------------------------------------------------------
+@router.delete("/empleados/{usuario_id}", status_code=status.HTTP_200_OK)
+def eliminar_empleado(
+    usuario_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_admin)
+):
+    """
+    Permite a un Administrador eliminar a un miembro de su equipo.
+    """
+    
+    if str(current_user.id) == str(usuario_id):
+        raise HTTPException(status_code=400, detail="No puedes eliminar tu propia cuenta de administrador.")
+        
+    # Aseguramos que el usuario a borrar pertenece a la misma empresa que el admin
+    empleado = db.query(Usuario).filter(Usuario.id == usuario_id, Usuario.empresa_id == current_user.empresa_id).first()
+    if not empleado:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado o no pertenece a tu equipo.")
+        
+    db.delete(empleado)
+    db.commit()
+    return {"mensaje": "Empleado eliminado correctamente del sistema."}

@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+.env
+.vscode/
+.idea/
+agente/build/
+agente/dist/
+frontend/public/agente-linux
+*.pkg
