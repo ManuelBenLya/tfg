@@ -108,36 +108,49 @@ def obtener_historial_metricas(
     return metricas
 
 
-# 🌟 EL NUEVO ENDPOINT UNIFICADO Y PROTEGIDO
 @router.get("/", response_model=List[MetricaResponse])
 def obtener_metricas_globales(
     rango: Optional[str] = '1h', 
-    servidor_id: Optional[int] = None, 
+    servidor_id: Optional[str] = None, 
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user) # 🔒 Protegido con token
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
-    Devuelve las métricas de la infraestructura filtradas por un rango de tiempo.
+    Devuelve las métricas filtradas por tiempo Y por los permisos del usuario.
     """
     ahora = datetime.utcnow()
     
-    if rango == '15m':
-        fecha_limite = ahora - timedelta(minutes=15)
-    elif rango == '1h':
-        fecha_limite = ahora - timedelta(hours=1)
-    elif rango == '24h':
-        fecha_limite = ahora - timedelta(hours=24)
-    elif rango == '7d':
-        fecha_limite = ahora - timedelta(days=7)
-    else:
-        fecha_limite = ahora - timedelta(hours=1)
+    if rango == '15m': fecha_limite = ahora - timedelta(minutes=15)
+    elif rango == '1h': fecha_limite = ahora - timedelta(hours=1)
+    elif rango == '24h': fecha_limite = ahora - timedelta(hours=24)
+    elif rango == '7d': fecha_limite = ahora - timedelta(days=7)
+    else: fecha_limite = ahora - timedelta(hours=1)
 
-    # 🌟 Usamos MetricaHardware que es tu modelo real
-    query = db.query(MetricaHardware).filter(MetricaHardware.tiempo >= fecha_limite)
+    # 🌟 1. LÓGICA DE SEGURIDAD (RBAC)
+    if current_user.rol == "admin" or current_user.rol == "superadmin":
+        # Los admins pueden ver todos los servidores de SU empresa
+        servidores_bd = db.query(Servidor.id).filter(Servidor.empresa_id == current_user.empresa_id).all()
+        servidores_permitidos = [s.id for s in servidores_bd]
+    else:
+        # Los técnicos SOLO ven los que se les han asignado en la tabla intermedia
+        servidores_permitidos = [s.id for s in current_user.servidores_supervisados]
+
+    # Si es un técnico sin servidores asignados, no buscamos nada, devolvemos vacío
+    if not servidores_permitidos:
+        return []
+
+    # 🌟 2. CONSULTA FILTRADA
+    # Solo traemos las métricas de los servidores que están en su lista de permitidos
+    query = db.query(MetricaHardware).filter(
+        MetricaHardware.tiempo >= fecha_limite,
+        MetricaHardware.servidor_id.in_(servidores_permitidos)
+    )
 
     if servidor_id:
+        # Si pide un servidor específico, verificamos que no intente espiar otro
+        if str(servidor_id) not in [str(id) for id in servidores_permitidos]:
+            raise HTTPException(status_code=403, detail="Acceso denegado a este servidor.")
         query = query.filter(MetricaHardware.servidor_id == servidor_id)
 
     metricas = query.order_by(MetricaHardware.tiempo.asc()).all()
-
     return metricas

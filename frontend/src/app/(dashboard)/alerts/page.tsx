@@ -16,12 +16,26 @@ export default function AlertsPage() {
   const [filter, setFilter] = useState<'all' | 'active' | 'resolved'>('all');
   const [loading, setLoading] = useState(true);
 
+  // 🌟 URL base inteligente para evitar problemas de CORS o IP local
+  const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
+    .replace(/\/$/, '')
+    .replace(/\/api$/, '');
+
   const fetchAlertas = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/alertas/pendientes');
+      const token = localStorage.getItem('token'); // 🔑 Obtenemos el token de seguridad
+      const res = await fetch(`${API_BASE}/api/alertas/pendientes`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}` // 🛡️ Enviamos el token al backend blindado
+        }
+      });
+      
       if (res.ok) {
         const data: AlertaBackend[] = await res.json();
         setAlerts(data);
+      } else {
+        console.error("Error al obtener alertas:", res.status);
       }
     } catch (error) {
       console.error("Error al conectar con el backend de alertas:", error);
@@ -38,11 +52,18 @@ export default function AlertsPage() {
 
   const handleResolve = async (id: number) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/alertas/${id}/marcar-leida`, {
+      const token = localStorage.getItem('token'); // 🔑 Obtenemos el token
+      const res = await fetch(`${API_BASE}/api/alertas/${id}/marcar-leida`, {
         method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}` // 🛡️ Autorizamos la petición de cambio
+        },
       });
+      
       if (res.ok) {
         setAlerts(prev => prev.map(alt => alt.id === id ? { ...alt, leida: true } : alt));
+      } else {
+        console.error("Error al marcar como leída:", res.status);
       }
     } catch (error) {
       console.error("Error al marcar la alerta como leída:", error);
@@ -146,7 +167,7 @@ export default function AlertsPage() {
                 {!alert.leida ? (
                   <button 
                     onClick={() => handleResolve(alert.id)}
-                    className="bg-body hover:bg-border text-title border border-border px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors shadow-sm"
+                    className="bg-body hover:bg-border text-title border border-border px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors shadow-sm cursor-pointer"
                   >
                     Marcar como Resuelta
                   </button>

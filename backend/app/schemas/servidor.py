@@ -30,3 +30,8 @@ class UmbralesUpdate(BaseModel):
     umbral_ram: float
     umbral_disco: float
     umbral_red: float
+
+
+# Esquema para actualizar datos
+class ServidorUpdate(BaseModel):
+    nombre: str

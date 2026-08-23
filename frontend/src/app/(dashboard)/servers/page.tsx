@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Server, Plus, Search, CheckCircle2, AlertTriangle, XCircle, Settings, Loader2, Users, FileText } from 'lucide-react';
+import { Server, Plus, Search, CheckCircle2, AlertTriangle, XCircle, Settings, Loader2, Users, FileText, Pencil, Trash2 } from 'lucide-react';
 import ModalUmbrales from '@/components/ui/ModalUmbrales'; 
 import ModalNuevoServidor from '@/components/ui/ModalNuevoServidor'; 
 import ModalAsignarUsuarios from '@/components/ui/ModalAsignarUsuarios';
@@ -32,7 +32,6 @@ export default function ServersPage() {
         const data = await res.json();
         setServers(data);
       } else {
-        console.error("No autorizado (401) o error en el servidor:", res.status);
         setServers([]);
       }
     } catch (error) {
@@ -42,7 +41,6 @@ export default function ServersPage() {
     }
   };
 
-  // 🌟 NUEVA FUNCIÓN PARA DESCARGAR EL PDF
   const handleDownloadPDF = async (servidorId: string, nombreServidor: string) => {
     try {
       const token = localStorage.getItem('token');
@@ -53,28 +51,67 @@ export default function ServersPage() {
         }
       });
 
-      if (!res.ok) {
-        throw new Error("Error al descargar el PDF");
-      }
+      if (!res.ok) throw new Error("Error al descargar el PDF");
 
-      // Transformamos la respuesta del backend en un archivo Blob
       const blob = await res.blob();
-      
-      // Creamos un enlace temporal en el navegador para forzar la descarga
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Reporte_${nombreServidor}.pdf`; // Nombre del archivo
+      a.download = `Reporte_${nombreServidor}.pdf`; 
       document.body.appendChild(a);
       a.click();
-      
-      // Limpiamos la basura temporal
       a.remove();
       window.URL.revokeObjectURL(url);
-
     } catch (error) {
-      console.error("Error al generar el PDF:", error);
       alert("Hubo un problema al generar el reporte PDF.");
+    }
+  };
+
+  // 🌟 NUEVO: BORRAR SERVIDOR
+  const handleEliminarServidor = async (servidorId: string, nombre: string) => {
+    if (!window.confirm(`¿Estás seguro de que quieres eliminar "${nombre}"? Esta acción borrará todas sus métricas y no se puede deshacer.`)) {
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://127.0.0.1:8000/api/servidores/${servidorId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        fetchServidores();
+      } else {
+        alert("Error al eliminar el servidor.");
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  };
+
+  // 🌟 NUEVO: RENOMBRAR SERVIDOR
+  const handleRenombrarServidor = async (servidorId: string, nombreActual: string) => {
+    const nuevoNombre = window.prompt("Introduce el nuevo nombre para el servidor:", nombreActual);
+    if (!nuevoNombre || nuevoNombre === nombreActual) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://127.0.0.1:8000/api/servidores/${servidorId}`, {
+        method: 'PUT',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ nombre: nuevoNombre })
+      });
+      
+      if (res.ok) {
+        fetchServidores();
+      } else {
+        alert("Error al renombrar el servidor.");
+      }
+    } catch (error) {
+      console.error("Error:", error);
     }
   };
 
@@ -94,7 +131,6 @@ export default function ServersPage() {
 
   return (
     <div className="space-y-6 relative">
-      {/* Cabecera de la página */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-title">Inventario de Servidores</h1>
@@ -112,7 +148,6 @@ export default function ServersPage() {
         )}
       </header>
 
-      {/* Barra de Búsqueda y Filtros Rápidos */}
       <div className="bg-surface p-4 rounded-xl border border-border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="relative w-full sm:w-96">
           <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-light" />
@@ -131,7 +166,6 @@ export default function ServersPage() {
         </div>
       </div>
 
-      {/* Tabla de Servidores */}
       <div className="bg-surface rounded-xl border border-border shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -192,7 +226,6 @@ export default function ServersPage() {
                     <td className="py-4 px-6 text-right">
                     <div className="flex items-center justify-end gap-2">
                       
-                      {/* 🌟 NUEVO BOTÓN: PDF (Disponible para todos) */}
                       <button 
                         onClick={() => handleDownloadPDF(srv.id, srv.nombre)}
                         title="Descargar Reporte PDF"
@@ -201,9 +234,24 @@ export default function ServersPage() {
                         <FileText size={18} />
                       </button>
 
-                      {/* Botones exclusivos de Administrador */}
                       {usuario?.rol === 'admin' ? (
                         <>
+                          <button 
+                            onClick={() => handleRenombrarServidor(srv.id, srv.nombre)}
+                            title="Renombrar Servidor"
+                            className="inline-flex items-center justify-center p-2 text-light hover:text-title hover:bg-body border border-transparent hover:border-border rounded-lg transition-colors shadow-sm"
+                          >
+                            <Pencil size={18} />
+                          </button>
+
+                          <button 
+                            onClick={() => setServidorAsignando(srv)}
+                            title="Asignar Usuarios"
+                            className="inline-flex items-center justify-center p-2 text-light hover:text-blue-500 hover:bg-body border border-transparent hover:border-border rounded-lg transition-colors shadow-sm"
+                          >
+                            <Users size={18} />
+                          </button>
+
                           <button 
                             onClick={() => setServidorEditando(srv)}
                             title="Configurar Umbrales"
@@ -211,13 +259,15 @@ export default function ServersPage() {
                           >
                             <Settings size={18} />
                           </button>
-                          
+
+                          <div className="w-px h-5 bg-border mx-1"></div>
+
                           <button 
-                            onClick={() => setServidorAsignando(srv)}
-                            title="Asignar Usuarios"
-                            className="inline-flex items-center justify-center p-2 text-light hover:text-blue-500 hover:bg-body border border-transparent hover:border-border rounded-lg transition-colors shadow-sm"
+                            onClick={() => handleEliminarServidor(srv.id, srv.nombre)}
+                            title="Eliminar Servidor"
+                            className="inline-flex items-center justify-center p-2 text-light hover:text-red-500 hover:bg-body border border-transparent hover:border-border rounded-lg transition-colors shadow-sm"
                           >
-                            <Users size={18} />
+                            <Trash2 size={18} />
                           </button>
                         </>
                       ) : (
@@ -235,7 +285,6 @@ export default function ServersPage() {
         </div>
       </div>
 
-      {/* RENDERIZADO DEL MODAL DE UMBRALES */}
       {servidorEditando && (
         <ModalUmbrales 
           servidorId={servidorEditando.id}
@@ -247,23 +296,17 @@ export default function ServersPage() {
             red: servidorEditando.umbral_red || 500.0
           }}
           onClose={() => setServidorEditando(null)}
-          onUpdateSuccess={() => {
-            fetchServidores();
-          }}
+          onUpdateSuccess={fetchServidores}
         />
       )}
 
-      {/* MODAL NUEVO SERVIDOR */}
       {mostrarModalNuevo && (
         <ModalNuevoServidor 
           onClose={() => setMostrarModalNuevo(false)}
-          onSuccess={() => {
-            fetchServidores();
-          }}
+          onSuccess={fetchServidores}
         />
       )}
 
-      {/* 🌟 NUEVO MODAL DE ASIGNAR USUARIOS */}
       {servidorAsignando && (
         <ModalAsignarUsuarios
           servidorId={servidorAsignando.id}

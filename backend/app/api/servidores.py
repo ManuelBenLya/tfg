@@ -4,7 +4,7 @@ from typing import List
 from datetime import datetime, timedelta
 
 from app.db.database import get_db
-from app.schemas.servidor import ServidorCreate, ServidorResponse, UmbralesUpdate
+from app.schemas.servidor import ServidorCreate, ServidorResponse, UmbralesUpdate, ServidorUpdate
 from app.crud import servidor as crud_servidor
 from app.api.deps import get_current_user
 from app.models.models import Usuario, Servidor, MetricaHardware
@@ -186,3 +186,46 @@ def descargar_reporte_pdf(
     }
     
     return StreamingResponse(pdf_buffer, media_type="application/pdf", headers=headers)
+
+
+
+# -------------------------------------------------------------------
+# EDITAR NOMBRE DEL SERVIDOR
+# -------------------------------------------------------------------
+@router.put("/{servidor_id}", status_code=status.HTTP_200_OK)
+def actualizar_servidor(
+    servidor_id: str,
+    datos: ServidorUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    if current_user.rol != "admin":
+        raise HTTPException(status_code=403, detail="No tienes permisos para editar servidores.")
+        
+    servidor = db.query(Servidor).filter(Servidor.id == servidor_id, Servidor.empresa_id == current_user.empresa_id).first()
+    if not servidor:
+        raise HTTPException(status_code=404, detail="Servidor no encontrado.")
+        
+    servidor.nombre = datos.nombre
+    db.commit()
+    return {"mensaje": "Nombre del servidor actualizado correctamente."}
+
+# -------------------------------------------------------------------
+# ELIMINAR SERVIDOR (Y SUS MÉTRICAS)
+# -------------------------------------------------------------------
+@router.delete("/{servidor_id}", status_code=status.HTTP_200_OK)
+def eliminar_servidor(
+    servidor_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    if current_user.rol != "admin":
+        raise HTTPException(status_code=403, detail="No tienes permisos para eliminar servidores.")
+        
+    servidor = db.query(Servidor).filter(Servidor.id == servidor_id, Servidor.empresa_id == current_user.empresa_id).first()
+    if not servidor:
+        raise HTTPException(status_code=404, detail="Servidor no encontrado.")
+        
+    db.delete(servidor)
+    db.commit()
+    return {"mensaje": "Servidor y todas sus métricas eliminados correctamente."}

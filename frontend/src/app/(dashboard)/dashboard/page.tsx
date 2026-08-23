@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { ChevronDown, Monitor, Layers, Server, LogOut, Clock } from 'lucide-react'; // 🌟 Añadido Clock
+import { ChevronDown, Monitor, Layers, Server, LogOut, Clock } from 'lucide-react';
 import CpuChart from "../../../components/charts/CpuChart";
 import RamChart from "../../../components/charts/RamChart";
 import NetworkChart from "../../../components/charts/NetworkChart";
@@ -18,10 +18,8 @@ export default function DashboardPage() {
 
   const [resolucion, setResolucion] = useState<'segundos' | 'minutos'>('segundos');
   
-  // 🌟 NUEVO ESTADO: Rango de tiempo seleccionado
   const [rangoTiempo, setRangoTiempo] = useState('1h');
 
-  // Opciones del selector de tiempo
   const opcionesTiempo = [
     { valor: '15m', etiqueta: '15 Min' },
     { valor: '1h', etiqueta: '1 Hora' },
@@ -42,7 +40,6 @@ export default function DashboardPage() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedView, setSelectedView] = useState(filterOptions[0]);
 
-  // 🌟 MODIFICADO: Ahora el useEffect depende de rangoTiempo
   useEffect(() => {
     const cargarDatos = async () => {
       try {
@@ -50,10 +47,8 @@ export default function DashboardPage() {
         const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
           .replace(/\/$/, '').replace(/\/api$/, '');
 
-        // 1. Cargamos los servidores
         const dataServidores = await getServidores();
         
-        // 2. Cargamos las métricas con el rango de tiempo aplicado en la URL
         const resMetricas = await fetch(`${API_BASE}/api/metricas/?rango=${rangoTiempo}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -72,13 +67,12 @@ export default function DashboardPage() {
 
     cargarDatos();
 
-    // Se recarga cada 5 segundos
     const intervalo = setInterval(() => {
       cargarDatos();
     }, 5000);
 
     return () => clearInterval(intervalo);
-  }, [rangoTiempo]); // 👈 Si cambia el rango, recarga instantáneamente los datos
+  }, [rangoTiempo]);
 
   const vistaActual = filterOptions.find(opt => opt.id === selectedView.id) || filterOptions[0];
 
@@ -89,7 +83,12 @@ export default function DashboardPage() {
   const agrupadoPorHora = metricasFiltradas.reduce((acc: any, metrica: any) => {
     const fecha = new Date(metrica.tiempo);
     
-    const opcionesFecha: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' };
+    // 🌟 CORRECCIÓN DE ZONA HORARIA: Forzamos la hora local del navegador
+    const opcionesFecha: Intl.DateTimeFormatOptions = { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone 
+    };
     if (resolucion === 'segundos') {
       opcionesFecha.second = '2-digit';
     }
@@ -137,10 +136,8 @@ export default function DashboardPage() {
           <p className="text-text mt-2">Visión general de la infraestructura monitorizada.</p>
         </div>
 
-        {/* 🌟 SELECTORES EN LA CABECERA */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
           
-          {/* Selector de Rango de Tiempo */}
           <div className="flex items-center bg-surface border border-border rounded-lg p-1 shadow-sm w-full sm:w-auto">
             <Clock size={16} className="text-light mx-2" />
             {opcionesTiempo.map((opcion) => (
@@ -149,8 +146,8 @@ export default function DashboardPage() {
                 onClick={() => setRangoTiempo(opcion.valor)}
                 className={`px-3 py-2 text-xs font-medium rounded-md transition-all flex-1 sm:flex-none ${
                   rangoTiempo === opcion.valor
-                    ? 'bg-body text-main shadow-sm border border-border' // Activo
-                    : 'text-light hover:text-title hover:bg-body/50' // Inactivo
+                    ? 'bg-body text-main shadow-sm border border-border'
+                    : 'text-light hover:text-title hover:bg-body/50'
                 }`}
               >
                 {opcion.etiqueta}
@@ -158,7 +155,6 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Selector de Servidor Original */}
           <div className="relative w-full sm:w-auto">
             <button 
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -200,7 +196,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Tarjetas Superiores */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-surface p-6 rounded-xl border border-border shadow-sm transition-colors duration-200">
           <h3 className="text-light font-medium">{vistaActual.type === 'server' ? 'Procesos Activos' : 'Servidores Registrados'}</h3>
@@ -252,7 +247,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Gráfica principal */}
       <div className="bg-surface p-6 rounded-xl border border-border shadow-sm transition-colors duration-200">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
           <div className="flex items-center gap-3">
@@ -289,7 +283,6 @@ export default function DashboardPage() {
         <CpuChart data={datosGraficas} />
       </div>
 
-      {/* Gráficas secundarias */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-surface p-6 rounded-xl border border-border shadow-sm transition-colors duration-200">
           <h3 className="text-title font-semibold text-lg">Distribución de Memoria RAM (GB)</h3>

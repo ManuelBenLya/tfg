@@ -184,3 +184,56 @@ def actualizar_ajustes(
     db.refresh(current_user)
     
     return {"mensaje": "Ajustes actualizados correctamente"}
+
+
+# -------------------------------------------------------------------
+# BORRAR EMPRESA (SOLO SUPERADMIN PLATAFORMA)
+# -------------------------------------------------------------------
+@router.delete("/empresa-master/{empresa_id}", status_code=status.HTTP_200_OK)
+def eliminar_empresa_por_superadmin(
+    empresa_id: str, # 🌟 CAMBIADO de int a str (porque es un UUID)
+    x_master_key: str = Header(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint exclusivo para el Superadmin.
+    Elimina una empresa y, por cascada, todos sus usuarios, servidores y métricas.
+    """
+    if x_master_key != MASTER_SECRET_KEY:
+        raise HTTPException(status_code=403, detail="Clave maestra de plataforma inválida.")
+    
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada.")
+        
+    db.delete(empresa)
+    db.commit()
+    return {"mensaje": f"Empresa '{empresa.nombre}' y toda su infraestructura asociada han sido eliminadas."}
+
+
+# -------------------------------------------------------------------
+# ELIMINAR EMPLEADO (SOLO ADMIN DE LA EMPRESA)
+# -------------------------------------------------------------------
+@router.delete("/empleados/{usuario_id}", status_code=status.HTTP_200_OK)
+def eliminar_empleado(
+    usuario_id: str, # 🌟 CAMBIADO de int a str (porque es un UUID)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Permite a un Administrador eliminar a un miembro de su equipo.
+    """
+    if current_user.rol != "admin":
+        raise HTTPException(status_code=403, detail="Solo los administradores pueden eliminar personal.")
+    
+    if str(current_user.id) == str(usuario_id):
+        raise HTTPException(status_code=400, detail="No puedes eliminar tu propia cuenta de administrador.")
+        
+    # Aseguramos que el usuario a borrar pertenece a la misma empresa que el admin
+    empleado = db.query(Usuario).filter(Usuario.id == usuario_id, Usuario.empresa_id == current_user.empresa_id).first()
+    if not empleado:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado o no pertenece a tu equipo.")
+        
+    db.delete(empleado)
+    db.commit()
+    return {"mensaje": "Empleado eliminado correctamente del sistema."}

@@ -2,30 +2,34 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, Mail, Lock, Shield, Plus, Loader2, CheckCircle2 } from 'lucide-react';
+import { Users, Mail, Lock, Shield, Plus, Loader2, CheckCircle2, Trash2 } from 'lucide-react';
 
 export default function EquipoPage() {
   const router = useRouter();
   const [usuarioActual, setUsuarioActual] = useState<any>(null);
   const [isChecking, setIsChecking] = useState(true);
 
-  // Estados del formulario
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rol, setRol] = useState('usuario');
   
-  // Estados de feedback
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
+  const [empleados, setEmpleados] = useState<any[]>([]);
+  const [loadingEmpleados, setLoadingEmpleados] = useState(true);
 
-  // 1. 🔒 PROTECCIÓN DE RUTA (Comprobamos si es admin)
+  // 🌟 FORMATEADOR DE URL INTELIGENTE
+  const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
+    .replace(/\/$/, '')
+    .replace(/\/api$/, '');
+
   useEffect(() => {
     const userGuardado = localStorage.getItem('usuario');
     if (userGuardado) {
       const userObj = JSON.parse(userGuardado);
       if (userObj.rol !== 'admin') {
-        // Si es un empleado normal, lo echamos al Dashboard
         router.push('/dashboard');
       } else {
         setUsuarioActual(userObj);
@@ -36,7 +40,32 @@ export default function EquipoPage() {
     setIsChecking(false);
   }, [router]);
 
-  // 2. FUNCIÓN PARA CREAR EMPLEADO
+  // 🌟 SE EJECUTA CUANDO usuarioActual ESTÁ LISTO
+  useEffect(() => {
+    if (usuarioActual) {
+      cargarEmpleados();
+    }
+  }, [usuarioActual]);
+
+  const cargarEmpleados = async () => {
+    setLoadingEmpleados(true);
+    try {
+      const token = localStorage.getItem('token');
+      // 🌟 USAMOS API_BASE
+      const res = await fetch(`${API_BASE}/api/usuarios/empleados`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEmpleados(data);
+      }
+    } catch (err) {
+      console.error("Error al cargar empleados", err);
+    } finally {
+      setLoadingEmpleados(false);
+    }
+  };
+
   const handleCrearEmpleado = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -45,27 +74,24 @@ export default function EquipoPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://127.0.0.1:8000/api/usuarios/empleados', {
+      // 🌟 USAMOS API_BASE
+      const res = await fetch(`${API_BASE}/api/usuarios/empleados`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          email: email,
-          password: password,
-          rol: rol
-        })
+        body: JSON.stringify({ email, password, rol })
       });
 
       const data = await res.json();
 
       if (res.ok) {
         setSuccess(`¡Éxito! ${data.mensaje}`);
-        // Limpiamos el formulario
         setEmail('');
         setPassword('');
         setRol('usuario');
+        cargarEmpleados(); 
       } else {
         setError(data.detail || "Error al crear el usuario");
       }
@@ -76,24 +102,65 @@ export default function EquipoPage() {
     }
   };
 
+ const handleEliminarEmpleado = async (empleadoId: string, emailEmpleado: string) => {
+    // CHIVATO 1: ¿Llega a ejecutarse el click?
+    console.log("1. Botón pulsado. Intentando borrar a:", emailEmpleado, "con ID:", empleadoId);
+
+    const confirmado = window.confirm(`¿Seguro que quieres revocar el acceso a ${emailEmpleado}?`);
+    
+    // CHIVATO 2: ¿Qué ha respondido la ventana de confirmación?
+    console.log("2. Respuesta de la confirmación:", confirmado);
+
+    if (!confirmado) {
+      console.log("3. Operación cancelada por el usuario.");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      // CHIVATO 3: Verificamos la URL exacta a la que estamos llamando
+      const urlDestino = `${API_BASE}/api/usuarios/empleados/${empleadoId}`;
+      console.log("4. Disparando FETCH hacia:", urlDestino);
+
+      const res = await fetch(urlDestino, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      // CHIVATO 4: ¿Qué código HTTP nos devuelve FastAPI? (200, 404, 422, 500...)
+      console.log("5. El backend ha respondido con STATUS:", res.status);
+
+      if (res.ok) {
+        console.log("6. ¡Éxito! Recargando la lista...");
+        cargarEmpleados();
+        alert("Empleado eliminado con éxito.");
+      } else {
+        const errData = await res.json();
+        console.error("7. El backend ha devuelto un error:", errData);
+        alert(errData.detail || "Error al eliminar el empleado");
+      }
+    } catch (err) {
+      console.error("8. Error crítico de red (¿CORS o backend apagado?):", err);
+      alert("Error de conexión al intentar borrar el empleado.");
+    }
+  };
   if (isChecking) {
     return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-main" /></div>;
   }
 
-  // Si no hay usuario (porque está redirigiendo), no renderizamos nada
   if (!usuarioActual) return null;
 
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-3xl font-bold text-title">Gestión de Equipo</h1>
-        <p className="text-text mt-1">Añade técnicos y administradores a la organización.</p>
+        <p className="text-text mt-1">Añade o elimina técnicos de la organización.</p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* PANEL IZQUIERDO: FORMULARIO */}
-        <div className="lg:col-span-1 bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+        <div className="lg:col-span-1 bg-surface border border-border rounded-xl shadow-sm self-start">
           <div className="p-4 border-b border-border bg-body/30">
             <h2 className="font-semibold text-title flex items-center gap-2">
               <Plus size={18} className="text-main" />
@@ -172,17 +239,61 @@ export default function EquipoPage() {
           </div>
         </div>
 
-        {/* PANEL DERECHO: INFORMACIÓN */}
+        {/* PANEL DERECHO: LISTA DE EQUIPO */}
         <div className="lg:col-span-2">
-          <div className="bg-surface border border-border rounded-xl shadow-sm p-8 flex flex-col items-center justify-center text-center h-full min-h-[300px]">
-            <div className="p-4 bg-body rounded-full mb-4">
-              <Users size={32} className="text-light" />
+          <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-border bg-body/30 flex items-center justify-between">
+              <h2 className="font-semibold text-title flex items-center gap-2">
+                <Users size={18} className="text-main" />
+                Directorio de la Organización
+              </h2>
             </div>
-            <h3 className="text-lg font-semibold text-title mb-2">Arquitectura Multi-Inquilino</h3>
-            <p className="text-text text-sm max-w-md">
-              Los usuarios creados aquí quedarán vinculados exclusivamente a tu organización (<code>ID: {usuarioActual.empresa_id.split('-')[0]}...</code>). <br/><br/>
-              Un operador normal solo podrá ver los servidores que tú le asignes explícitamente y no podrá modificar parámetros críticos como los umbrales de alerta.
-            </p>
+            
+            <div className="p-0 overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border bg-body/50 text-light text-xs uppercase tracking-wider">
+                    <th className="py-3 px-6 font-semibold">Usuario</th>
+                    <th className="py-3 px-6 font-semibold">Rol</th>
+                    <th className="py-3 px-6 font-semibold text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border text-sm">
+                  {loadingEmpleados ? (
+                    <tr>
+                      <td colSpan={3} className="py-8 text-center"><Loader2 className="animate-spin text-main mx-auto" /></td>
+                    </tr>
+                  ) : empleados.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-8 text-center text-light">No hay más usuarios en la organización.</td>
+                    </tr>
+                  ) : (
+                    empleados.map((emp) => (
+                      <tr key={emp.id} className="hover:bg-body/30 transition-colors">
+                        <td className="py-3 px-6 font-medium text-title">{emp.email}</td>
+                        <td className="py-3 px-6">
+                          {emp.rol === 'admin' ? (
+                            <span className="text-xs bg-amber-500/10 text-amber-500 px-2 py-1 rounded font-medium border border-amber-500/20">Administrador</span>
+                          ) : (
+                            <span className="text-xs bg-blue-500/10 text-blue-500 px-2 py-1 rounded font-medium border border-blue-500/20">Técnico</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-6 text-right">
+                          <button
+                            onClick={() => handleEliminarEmpleado(emp.id, emp.email)}
+                            disabled={emp.id === usuarioActual.id} 
+                            title={emp.id === usuarioActual.id ? "No puedes borrarte a ti mismo" : "Eliminar empleado"}
+                            className="inline-flex p-2 text-light hover:text-red-500 hover:bg-body rounded-lg transition-colors disabled:opacity-30 disabled:hover:text-light disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
