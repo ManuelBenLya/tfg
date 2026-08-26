@@ -88,11 +88,6 @@ def enviar_notificaciones_alerta(db, servidor: Servidor, mensaje: str):
                 logger.info(f"[EMAIL MOCK] Enviando alerta por correo a {user.email} -> {mensaje}")
             else:
                 try:
-                    msg = MIMEMultipart()
-                    msg['From'] = smtp_from
-                    msg['To'] = user.email
-                    msg['Subject'] = f" ALERTA SMI: {servidor.nombre}"
-                    
                     body = f"""
                     SMI - Sistema de Monitorización de Infraestructura
                     
@@ -105,18 +100,50 @@ def enviar_notificaciones_alerta(db, servidor: Servidor, mensaje: str):
                     
                     Por favor, accede al panel de control para más detalles.
                     """
-                    msg.attach(MIMEText(body, 'plain'))
-                    
-                    # Soporte para SSL en puerto 465 (necesario en hosting como Render que bloquean el 587)
-                    if smtp_port == 465:
-                        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
-                            server.login(smtp_user, smtp_password)
-                            server.send_message(msg)
+
+                    # Si el proveedor es Brevo, podemos usar su API HTTP (evitando bloqueos de puertos SMTP en Render Free)
+                    if "brevo" in smtp_host.lower():
+                        headers = {
+                            "api-key": smtp_password,
+                            "Content-Type": "application/json",
+                            "accept": "application/json"
+                        }
+                        payload = {
+                            "sender": {
+                                "email": smtp_from,
+                                "name": "SMI Monitor"
+                            },
+                            "to": [
+                                {
+                                    "email": user.email
+                                }
+                            ],
+                            "subject": f" ALERTA SMI: {servidor.nombre}",
+                            "textContent": body
+                        }
+                        res = requests.post("https://api.brevo.com/v3/smtp/email", json=payload, headers=headers, timeout=10)
+                        if res.status_code == 201:
+                            logger.info(f"Correo de alerta enviado exitosamente a {user.email} (vía Brevo API)")
+                        else:
+                            logger.error(f"Error al enviar correo por API de Brevo: {res.status_code} - {res.text}")
                     else:
-                        with smtplib.SMTP(smtp_host, smtp_port) as server:
-                            server.starttls()
-                            server.login(smtp_user, smtp_password)
-                            server.send_message(msg)
-                    logger.info(f"Correo de alerta enviado exitosamente a {user.email}")
+                        # Fallback SMTP estándar para otros proveedores
+                        msg = MIMEMultipart()
+                        msg['From'] = smtp_from
+                        msg['To'] = user.email
+                        msg['Subject'] = f" ALERTA SMI: {servidor.nombre}"
+                        msg.attach(MIMEText(body, 'plain'))
+                        
+                        # Soporte para SSL en puerto 465 (necesario en hosting como Render que bloquean el 587)
+                        if smtp_port == 465:
+                            with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+                                server.login(smtp_user, smtp_password)
+                                server.send_message(msg)
+                        else:
+                            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                                server.starttls()
+                                server.login(smtp_user, smtp_password)
+                                server.send_message(msg)
+                        logger.info(f"Correo de alerta enviado exitosamente a {user.email}")
                 except Exception as e:
                     logger.error(f"Error al enviar correo electrónico a {user.email}: {e}")
