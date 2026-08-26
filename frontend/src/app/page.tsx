@@ -24,7 +24,7 @@ export default function Home() {
             <span className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
               <Activity size={20} className="animate-pulse" />
             </span>
-            <span className="text-xl font-bold text-white tracking-tight">SITEM</span>
+            <span className="text-xl font-bold text-white tracking-tight">SMI</span>
             <span className="text-xs font-mono bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/20">
               SaaS B2B
             </span>
@@ -33,15 +33,9 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <Link 
               href="/login" 
-              className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
-            >
-              Acceso Empresa
-            </Link>
-            <Link 
-              href="/login" 
               className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
             >
-              <span>Panel de Control</span>
+              <span>Acceso Empresa</span>
               <ChevronRight size={16} />
             </Link>
           </div>
@@ -67,7 +61,7 @@ export default function Home() {
           </h1>
           
           <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto font-light leading-relaxed">
-            SITEM es una plataforma SaaS B2B blindada para la monitorización de servidores, 
+            SMI es una plataforma SaaS B2B blindada para la monitorización de servidores, 
             análisis de métricas de hardware y envío inteligente de alertas críticas.
           </p>
 
@@ -95,12 +89,12 @@ export default function Home() {
           <div className="space-y-4 max-w-2xl text-left">
             <h2 className="text-2xl font-bold text-white">Plataforma Exclusiva B2B</h2>
             <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-              El registro público de usuarios está deshabilitado. SITEM opera bajo un modelo de 
-              **aislamiento Multi-tenant**. Cada empresa cuenta con un entorno aislado donde se almacenan sus métricas, 
+              El registro público de usuarios está deshabilitado. SMI opera bajo un modelo de 
+              **Aislamiento por Inquilino**. Cada empresa cuenta con un entorno aislado donde se almacenan sus métricas, 
               servidores y configuraciones de alertas de forma totalmente segura.
             </p>
             <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-              Si tu empresa ya ha sido dada de alta por la administración central de SITEM, puedes acceder 
+              Si tu empresa ya ha sido dada de alta por la administración central de SMI, puedes acceder 
               utilizando las credenciales proporcionadas.
             </p>
           </div>
@@ -119,7 +113,7 @@ export default function Home() {
       <section className="py-20 px-6 bg-[#0a0d16] border-t border-slate-900">
         <div className="max-w-7xl mx-auto space-y-12">
           <div className="text-center space-y-3">
-            <h2 className="text-3xl font-bold text-white">¿Cómo Funciona SITEM?</h2>
+            <h2 className="text-3xl font-bold text-white">¿Cómo Funciona SMI?</h2>
             <p className="text-slate-400 max-w-xl mx-auto text-sm sm:text-base">
               Flujo integrado desde la recolección física en tus máquinas hasta el panel de administración.
             </p>
@@ -180,8 +174,8 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="p-6 bg-[#121a2e]/25 border border-slate-800/80 rounded-xl text-left space-y-3">
             <span className="text-indigo-400"><ShieldCheck size={28} /></span>
-            <h4 className="text-base font-bold text-white">Seguridad Multi-Tenant</h4>
-            <p className="text-xs text-slate-400 leading-relaxed">Aislamiento lógico a nivel de base de datos para que los datos de tu empresa permanezcan estrictamente inaccesibles.</p>
+            <h4 className="text-base font-bold text-white">Aislamiento por Inquilino</h4>
+            <p className="text-xs text-slate-400 leading-relaxed">Aislamiento lógico a nivel de base de datos para que los datos de tu empresa permanezcan estrictamente inaccesibles para otros inquilinos.</p>
           </div>
 
           <div className="p-6 bg-[#121a2e]/25 border border-slate-800/80 rounded-xl text-left space-y-3">
@@ -214,7 +208,7 @@ export default function Home() {
             <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-2xl inline-block border border-indigo-500/20 mb-2">
               <Mail size={24} />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">¿Quieres usar SITEM en tu empresa?</h2>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">¿Quieres usar SMI en tu empresa?</h2>
             <p className="text-slate-400 text-sm sm:text-base max-w-lg mx-auto font-light leading-relaxed">
               Solicita el alta de tu empresa en nuestra base de datos. Nos pondremos en contacto contigo para asignarte una cuenta de Administrador raíz.
             </p>
@@ -222,7 +216,7 @@ export default function Home() {
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4 relative z-10 max-w-md mx-auto">
             <a 
-              href="mailto:soporte@sitem.com" 
+              href="mailto:soporte@smi.com" 
               className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-3.5 rounded-xl transition-all shadow-md text-sm cursor-pointer flex items-center justify-center gap-2"
             >
               <Mail size={16} />
@@ -230,7 +224,7 @@ export default function Home() {
             </a>
             <div className="text-xs text-slate-500 font-mono">
               O escríbenos directamente a: <br className="sm:hidden" />
-              <span className="text-indigo-400 font-semibold">soporte@sitem.com</span>
+              <span className="text-indigo-400 font-semibold">soporte@smi.com</span>
             </div>
           </div>
         </div>
@@ -239,7 +233,7 @@ export default function Home() {
       {/* 7. FOOTER */}
       <footer className="py-12 border-t border-slate-900 bg-[#0b0f19] text-center text-xs text-slate-500 px-6">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© {new Date().getFullYear()} SITEM - Sistema de Monitorización de Infraestructuras. Todos los derechos reservados.</p>
+          <p>© {new Date().getFullYear()} SMI - Sistema de Monitorización de Infraestructuras. Todos los derechos reservados.</p>
           <div className="flex gap-4">
             <Link href="/login" className="hover:text-slate-300 transition-colors">Acceso de Clientes</Link>
             <span>•</span>
