@@ -41,6 +41,9 @@ class Usuario(Base):
     email = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
     rol = Column(String, default="usuario") # Roles: "admin" o "usuario"
+    discord_webhook = Column(String, nullable=True)
+    slack_webhook = Column(String, nullable=True)
+    recibir_alertas_email = Column(Boolean, default=True)
 
     empresa = relationship("Empresa", back_populates="usuarios")
     servidores_supervisados = relationship(

@@ -170,11 +170,10 @@ def actualizar_ajustes(
     """
     Actualiza las preferencias y webhooks de alerta del usuario autenticado.
     """
-    # Si tus columnas en la base de datos se llaman así, las actualizamos:
-    if hasattr(current_user, "discord_webhook"):
-        current_user.discord_webhook = ajustes.discord_webhook
-    if hasattr(current_user, "slack_webhook"):
-        current_user.slack_webhook = ajustes.slack_webhook
+    current_user.discord_webhook = ajustes.discord_webhook
+    current_user.slack_webhook = ajustes.slack_webhook
+    if ajustes.recibir_alertas_email is not None:
+        current_user.recibir_alertas_email = ajustes.recibir_alertas_email
         
     db.commit()
     db.refresh(current_user)

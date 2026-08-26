@@ -13,6 +13,11 @@ from app.db.database import Base
 from app.models import models
 
 import os
+from dotenv import load_dotenv
+
+# Load .env variables
+load_dotenv()
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

@@ -66,7 +66,18 @@ def evaluar_umbrales_y_alertar_bg(metrica_dict: dict, servidor_id: str):
                 Alerta.mensaje.like(f"{mensaje_alerta[:15]}%") # Misma categoría
             ).order_by(Alerta.tiempo.desc()).first()
             
-            if not ultima_alerta or (datetime.now(timezone.utc) - ultima_alerta.tiempo.replace(tzinfo=timezone.utc)) > timedelta(minutes=15):
+            hace_15_min = True
+            if ultima_alerta:
+                tiempo_alerta = ultima_alerta.tiempo
+                if tiempo_alerta.tzinfo is None:
+                    # Si es naive (ej. SQLite), asumimos UTC
+                    tiempo_alerta = tiempo_alerta.replace(tzinfo=timezone.utc)
+                else:
+                    # Si es aware (ej. PostgreSQL), lo convertimos correctamente a UTC
+                    tiempo_alerta = tiempo_alerta.astimezone(timezone.utc)
+                hace_15_min = (datetime.now(timezone.utc) - tiempo_alerta) > timedelta(minutes=15)
+            
+            if not ultima_alerta or hace_15_min:
                 nueva_alerta = Alerta(
                     servidor_id=servidor.id,
                     mensaje=mensaje_alerta,

@@ -73,7 +73,7 @@ def enviar_notificaciones_alerta(db, servidor: Servidor, mensaje: str):
                 logger.error(f"Error al enviar notificación a Slack para {user.email}: {e}")
 
         # --- EMAIL (SMTP) ---
-        if user.recibir_alertas_email:
+        if user.recibir_alertas_email is not False:
             # Si no hay credenciales configuradas en settings, mockeamos en logs
             if not getattr(settings, "SMTP_USER", None) or not getattr(settings, "SMTP_PASSWORD", None):
                 logger.info(f"[EMAIL MOCK] Enviando alerta por correo a {user.email} -> {mensaje}")
