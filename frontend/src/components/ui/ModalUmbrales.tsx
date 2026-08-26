@@ -29,7 +29,7 @@ export default function ModalUmbrales({ servidorId, nombreServidor, umbralesActu
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          // 'Authorization': `Bearer ${localStorage.getItem('token')}` // Si usas JWT
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
           umbral_cpu: formData.cpu,
