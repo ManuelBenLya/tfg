@@ -107,10 +107,16 @@ def enviar_notificaciones_alerta(db, servidor: Servidor, mensaje: str):
                     """
                     msg.attach(MIMEText(body, 'plain'))
                     
-                    with smtplib.SMTP(smtp_host, smtp_port) as server:
-                        server.starttls()
-                        server.login(smtp_user, smtp_password)
-                        server.send_message(msg)
+                    # Soporte para SSL en puerto 465 (necesario en hosting como Render que bloquean el 587)
+                    if smtp_port == 465:
+                        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+                            server.login(smtp_user, smtp_password)
+                            server.send_message(msg)
+                    else:
+                        with smtplib.SMTP(smtp_host, smtp_port) as server:
+                            server.starttls()
+                            server.login(smtp_user, smtp_password)
+                            server.send_message(msg)
                     logger.info(f"Correo de alerta enviado exitosamente a {user.email}")
                 except Exception as e:
                     logger.error(f"Error al enviar correo electrónico a {user.email}: {e}")
