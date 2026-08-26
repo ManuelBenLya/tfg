@@ -82,10 +82,10 @@ def enviar_notificaciones_alerta(db, servidor: Servidor, mensaje: str):
                     msg = MIMEMultipart()
                     msg['From'] = settings.SMTP_FROM
                     msg['To'] = user.email
-                    msg['Subject'] = f"🚨 ALERTA SITEM: {servidor.nombre}"
+                    msg['Subject'] = f"🚨 ALERTA SMI: {servidor.nombre}"
                     
                     body = f"""
-                    SITEM - Sistema de Monitorización de Infraestructura
+                    SMI - Sistema de Monitorización de Infraestructura
                     
                     Se ha generado una alerta en uno de tus servidores:
                     

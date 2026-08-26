@@ -40,6 +40,7 @@ export default function SettingsPage() {
             rol: data.rol === 'admin' ? 'Administrador' : data.rol === 'superadmin' ? 'Super Admin' : 'Usuario',
             discordWebhook: data.discord_webhook || '',
             slackWebhook: data.slack_webhook || '',
+            emailNotifications: data.recibir_alertas_email !== false,
           }));
         }
       } catch (error) {

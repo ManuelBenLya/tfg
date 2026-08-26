@@ -35,7 +35,7 @@ class UsuarioResponse(UsuarioBase):
     empresa_id: UUID # 🌟 CRÍTICO: Para que Next.js sepa a qué empresa pertenece
     discord_webhook: str | None = None
     slack_webhook: str | None = None
-    recibir_alertas_email: bool = True
+    recibir_alertas_email: bool | None = True
     
     class Config:
         from_attributes = True
