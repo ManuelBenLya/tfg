@@ -6,7 +6,7 @@ import os
 
 # Importaciones de tu base de datos y seguridad
 from app.db.database import SessionLocal
-from app.schemas.usuario import UsuarioCreate, UsuarioResponse, Token, RegistroEmpresaCreate, AjustesUpdate
+from app.schemas.usuario import UsuarioCreate, UsuarioResponse, Token, RegistroEmpresaCreate, AjustesUpdate, EmpresaSMTPResponse, EmpresaSMTPUpdate
 from app.crud import usuario as crud_usuario
 from app.core.security import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.core.security import get_password_hash 
@@ -179,6 +179,53 @@ def actualizar_ajustes(
     db.refresh(current_user)
     
     return {"mensaje": "Ajustes actualizados correctamente"}
+
+
+@router.get("/empresa/smtp", response_model=EmpresaSMTPResponse)
+def obtener_smtp_empresa(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_admin)
+):
+    """
+    Recupera los ajustes SMTP de la empresa del administrador.
+    """
+    empresa = current_user.empresa
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+        
+    return EmpresaSMTPResponse(
+        smtp_host=empresa.smtp_host,
+        smtp_port=empresa.smtp_port,
+        smtp_user=empresa.smtp_user,
+        smtp_from=empresa.smtp_from,
+        has_password=bool(empresa.smtp_password)
+    )
+
+
+@router.put("/empresa/smtp")
+def actualizar_smtp_empresa(
+    smtp_data: EmpresaSMTPUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_admin)
+):
+    """
+    Actualiza los ajustes SMTP de la empresa del administrador.
+    """
+    empresa = current_user.empresa
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+        
+    empresa.smtp_host = smtp_data.smtp_host
+    empresa.smtp_port = smtp_data.smtp_port
+    empresa.smtp_user = smtp_data.smtp_user
+    empresa.smtp_from = smtp_data.smtp_from
+    
+    # Solo actualizamos la contraseña si se proporciona una nueva
+    if smtp_data.smtp_password and smtp_data.smtp_password.strip():
+        empresa.smtp_password = smtp_data.smtp_password.strip()
+        
+    db.commit()
+    return {"mensaje": "Configuración SMTP de la empresa actualizada correctamente"}
 
 
 # -------------------------------------------------------------------

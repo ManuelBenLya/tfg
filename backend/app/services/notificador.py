@@ -74,15 +74,24 @@ def enviar_notificaciones_alerta(db, servidor: Servidor, mensaje: str):
 
         # --- EMAIL (SMTP) ---
         if user.recibir_alertas_email is not False:
-            # Si no hay credenciales configuradas en settings, mockeamos en logs
-            if not getattr(settings, "SMTP_USER", None) or not getattr(settings, "SMTP_PASSWORD", None):
+            # Intentamos obtener la configuración SMTP de la empresa del servidor
+            empresa = servidor.empresa
+            
+            smtp_host = empresa.smtp_host if (empresa and empresa.smtp_host) else getattr(settings, "SMTP_HOST", None)
+            smtp_port = empresa.smtp_port if (empresa and empresa.smtp_port) else getattr(settings, "SMTP_PORT", 587)
+            smtp_user = empresa.smtp_user if (empresa and empresa.smtp_user) else getattr(settings, "SMTP_USER", None)
+            smtp_password = empresa.smtp_password if (empresa and empresa.smtp_password) else getattr(settings, "SMTP_PASSWORD", None)
+            smtp_from = empresa.smtp_from if (empresa and empresa.smtp_from) else getattr(settings, "SMTP_FROM", "alertas@sitem.com")
+
+            # Si no hay credenciales configuradas (ni de empresa ni globales), mockeamos en logs
+            if not smtp_user or not smtp_password or not smtp_host:
                 logger.info(f"[EMAIL MOCK] Enviando alerta por correo a {user.email} -> {mensaje}")
             else:
                 try:
                     msg = MIMEMultipart()
-                    msg['From'] = settings.SMTP_FROM
+                    msg['From'] = smtp_from
                     msg['To'] = user.email
-                    msg['Subject'] = f"🚨 ALERTA SMI: {servidor.nombre}"
+                    msg['Subject'] = f" ALERTA SMI: {servidor.nombre}"
                     
                     body = f"""
                     SMI - Sistema de Monitorización de Infraestructura
@@ -98,9 +107,9 @@ def enviar_notificaciones_alerta(db, servidor: Servidor, mensaje: str):
                     """
                     msg.attach(MIMEText(body, 'plain'))
                     
-                    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+                    with smtplib.SMTP(smtp_host, smtp_port) as server:
                         server.starttls()
-                        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                        server.login(smtp_user, smtp_password)
                         server.send_message(msg)
                     logger.info(f"Correo de alerta enviado exitosamente a {user.email}")
                 except Exception as e:

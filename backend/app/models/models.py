@@ -26,6 +26,13 @@ class Empresa(Base):
     nombre = Column(String, unique=True, nullable=False)
     fecha_registro = Column(DateTime(timezone=True), server_default=func.now())
 
+    # Ajustes SMTP personalizados por empresa (Multi-tenant SMTP)
+    smtp_host = Column(String, nullable=True)
+    smtp_port = Column(Integer, nullable=True)
+    smtp_user = Column(String, nullable=True)
+    smtp_password = Column(String, nullable=True)
+    smtp_from = Column(String, nullable=True)
+
     # Relaciones: Si borramos una empresa, se borran sus usuarios y servidores en cascada
     usuarios = relationship("Usuario", back_populates="empresa", cascade="all, delete-orphan")
     servidores = relationship("Servidor", back_populates="empresa", cascade="all, delete-orphan")

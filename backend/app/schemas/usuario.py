@@ -56,3 +56,22 @@ class AjustesUpdate(BaseModel):
     discord_webhook: str | None = None
     slack_webhook: str | None = None
     recibir_alertas_email: bool | None = True
+
+
+class EmpresaSMTPResponse(BaseModel):
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_user: str | None = None
+    smtp_from: str | None = None
+    has_password: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class EmpresaSMTPUpdate(BaseModel):
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
