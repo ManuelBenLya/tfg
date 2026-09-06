@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* TUS COLORES: MODO CLARO */
+  :root {
+    --main-color: #1083D6;
+    --title-color: #2A3B47;
+    --text-color: #697477;
+    --light-text-color: #A0A7AC;
+    --body-color: #FBFBFE;
+    
+    /* Variables de apoyo para que las tarjetas destaquen sobre el body */
+    --surface-color: #FFFFFF; 
+    --border-color: #e2e8f0;
+  }
+
+  /* MODO OSCURO (Equivalentes armónicos) */
+  .dark {
+    --main-color: #818cf8;       /* Azul índigo suave */
+    --title-color: #f1f5f9;      /* Blanco roto para títulos */
+    --text-color: #94a3b8;       /* Gris azulado para texto */
+    --light-text-color: #64748b; /* Gris más oscuro para detalles */
+    --body-color: #0b0f19;       /* Fondo oscuro */
+    
+    --surface-color: #151f32;    /* Fondo de tarjetas oscuro */
+    --border-color: #1e293b;
+  }
+
+  body {
+    background-color: var(--body-color);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
